@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from graphrag.config.defaults import graphrag_config_defaults
 from graphrag.config.models.language_model_config import LanguageModelConfig
+from graphrag.domain.context import DomainContext
 
 
 class ClaimExtractionConfig(BaseModel):
@@ -40,16 +41,30 @@ class ClaimExtractionConfig(BaseModel):
     )
 
     def resolved_strategy(
-        self, root_dir: str, model_config: LanguageModelConfig
+        self,
+        root_dir: str,
+        model_config: LanguageModelConfig,
+        domain_context: DomainContext | None = None,
     ) -> dict:
         """Get the resolved claim extraction strategy."""
-        return self.strategy or {
-            "llm": model_config.model_dump(),
-            "extraction_prompt": (Path(root_dir) / self.prompt).read_text(
+        if self.strategy:
+            return self.strategy
+
+        prompt_override = None
+        if domain_context and domain_context.covariate_prompt:
+            prompt_override = domain_context.covariate_prompt
+        elif self.prompt:
+            prompt_override = (Path(root_dir) / self.prompt).read_text(
                 encoding="utf-8"
             )
-            if self.prompt
-            else None,
-            "claim_description": self.description,
+
+        description = self.description
+        if domain_context and domain_context.covariate_description:
+            description = domain_context.covariate_description
+
+        return {
+            "llm": model_config.model_dump(),
+            "extraction_prompt": prompt_override,
+            "claim_description": description,
             "max_gleanings": self.max_gleanings,
         }

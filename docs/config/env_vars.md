@@ -54,19 +54,6 @@ configuration files:
 | `GRAPHRAG_DEFAULT_CHAT_MODEL`      | No        | Default chat model identifier for generated configs.            | `str` | `gpt-4-turbo-preview` |
 | `GRAPHRAG_DEFAULT_EMBEDDING_MODEL` | No        | Default embedding model identifier for generated configs.       | `str` | `text-embedding-3-small` |
 
-
-#### Provider-neutral defaults
-
-GraphRAG also checks the following optional environment variables to decide
-which provider and models to pre-populate when no explicit value is set in
-configuration files:
-
-| Parameter                          | Required? | Description                                                     | Type  | Default Value         |
-| ---------------------------------- | --------- | --------------------------------------------------------------- | ----- | --------------------- |
-| `GRAPHRAG_DEFAULT_MODEL_PROVIDER`  | No        | Default provider prefix supplied to LiteLLM-backed model calls. | `str` | `openai`              |
-| `GRAPHRAG_DEFAULT_CHAT_MODEL`      | No        | Default chat model identifier for generated configs.            | `str` | `gpt-4-turbo-preview` |
-| `GRAPHRAG_DEFAULT_EMBEDDING_MODEL` | No        | Default embedding model identifier for generated configs.       | `str` | `text-embedding-3-small` |
-
 ### Text Generation Settings
 
 These settings control the text generation model used by the pipeline. Any settings with a fallback will use the base LLM settings, if available.

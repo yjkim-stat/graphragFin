@@ -95,6 +95,22 @@ Our pipeline can ingest .csv, .txt, or .json data from an input location. See th
 - `title_column` **str** - (CSV/JSON only) The title column name, filename will be used if unset.
 - `metadata` **list[str]** - (CSV/JSON only) The additional document attributes fields to keep.
 
+### domain_intelligence
+
+This block enables optional domain-aware enrichment during indexing and query.
+
+- `enabled` **bool** – Master flag to turn the feature on.
+- `profile` **str|None** – Name of a built-in profile (`finance` today) bundling prompts and rules.
+- `domain` **str|None** – Override the human-readable name written to outputs and prompts.
+- `entity_rules` **list[dict]** – Custom tagging rules appended after the profile rules. Each rule supports `tag`, `match_types`, `keywords`, `match_titles`, `priority`, and `primary`.
+- `covariate_type` **str|None** – Override the `covariate_type` emitted by the claim extractor.
+- `covariate_entity_types` **list[str]|None** – Restrict claim extraction to these entity types.
+- `covariate_description` **str|None** – Replace the default claim description passed to the extractor.
+- `covariate_prompt` **str|None** – Path or literal prompt string for claim extraction.
+- `community_graph_prompt` / `community_text_prompt` **str|None** – Path or literal prompt string for community summarisation.
+- `covariate_subject_tags_column`, `covariate_primary_tag_column`, `covariate_profile_column` **str** – Customise the names of the metadata columns added to covariates.
+- `entity_tag_column`, `entity_primary_column`, `entity_profile_column` **str** – Customise the names of the metadata columns added to entities.
+
 ### chunks
 
 These settings configure how we parse documents into text chunks. This is necessary because very large documents may not fit into a single context window, and graph extraction accuracy can be modulated. Also note the `metadata` setting in the input document config, which will replicate document metadata into each chunk.

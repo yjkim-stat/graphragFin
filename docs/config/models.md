@@ -74,6 +74,28 @@ With this configuration you can reference the models by `model_id` anywhere in y
 
 A ready-to-use starter file can be copied from [`docs/config/examples/huggingface-settings.yaml`](examples/huggingface-settings.yaml).
 
+## Domain intelligence enrichment
+
+GraphRAG can optionally layer domain-specific intelligence over the indexed graph. The `domain_intelligence` block controls this behaviour and is disabled by default so existing pipelines continue to behave exactly as before. Enabling it unlocks three capabilities:
+
+- **Entity tagging** – entities receive additional metadata columns (`domain_profile`, `domain_tags`, `domain_primary_tag`) that capture which taxonomy buckets they belong to. These tags surface in local search context tables and downstream analytics.
+- **Covariate targeting** – the claim extraction workflow can swap in domain-aware prompts and claim descriptions, emit a custom `covariate_type`, and attach the entity tags back onto each covariate (`subject_domain_tags`, `subject_domain_primary_tag`).
+- **Community prompts** – graph and text based community summaries can reuse finance-focused prompt templates that emphasise catalysts, horizons, and price impact.
+
+```yaml
+domain_intelligence:
+  enabled: true
+  profile: finance            # use the built-in commodities & futures profile
+  domain: "Metals and Energy"  # override the label used in prompts and outputs
+  entity_rules:
+    - tag: battery_material
+      keywords: [lithium, cobalt, nickel]
+      priority: 5
+      primary: true
+```
+
+Profiles bundle prompts, covariate defaults, and an initial rule set. The bundled `finance` profile focuses on commodities and futures; additional rules can be appended to tailor the taxonomy for your dataset. Custom prompts may be supplied by pointing `covariate_prompt`, `community_graph_prompt`, or `community_text_prompt` to files relative to the project root. See [`domain-intelligence-finance.yaml`](examples/domain-intelligence-finance.yaml) for a complete example.
+
 ## Model Selection Considerations
 
 GraphRAG has been most thoroughly tested with the gpt-4 series of models from OpenAI, including gpt-4 gpt-4-turbo, gpt-4o, and gpt-4o-mini. Our [arXiv paper](https://arxiv.org/abs/2404.16130), for example, performed quality evaluation using gpt-4-turbo. As stated above, non-OpenAI models are now supported with GraphRAG 2.6.0 and onwards through the use of LiteLLM but the suite of gpt-4 series of models from OpenAI remain the most tested and supported suite of models for GraphRAG.

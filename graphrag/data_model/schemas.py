@@ -80,6 +80,9 @@ ENTITIES_FINAL_COLUMNS = [
     NODE_DEGREE,
     NODE_X,
     NODE_Y,
+    "domain_profile",
+    "domain_tags",
+    "domain_primary_tag",
 ]
 
 RELATIONSHIPS_FINAL_COLUMNS = [
@@ -133,6 +136,9 @@ COVARIATES_FINAL_COLUMNS = [
     TYPE,
     DESCRIPTION,
     "subject_id",
+    "domain_profile",
+    "subject_domain_tags",
+    "subject_domain_primary_tag",
     "object_id",
     "status",
     "start_date",

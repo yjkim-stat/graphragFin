@@ -214,6 +214,27 @@ class ExtractClaimsDefaults:
 
 
 @dataclass
+class DomainIntelligenceDefaults:
+    """Default values for domain intelligence enrichment."""
+
+    enabled: bool = False
+    profile: str | None = None
+    domain: str | None = None
+    entity_tag_column: str = "domain_tags"
+    entity_primary_column: str | None = "domain_primary_tag"
+    entity_profile_column: str | None = "domain_profile"
+    covariate_type: str | None = None
+    covariate_entity_types: list[str] | None = None
+    covariate_description: str | None = None
+    covariate_prompt: str | None = None
+    covariate_subject_tags_column: str = "subject_domain_tags"
+    covariate_primary_tag_column: str | None = "subject_domain_primary_tag"
+    covariate_profile_column: str | None = "domain_profile"
+    community_graph_prompt: str | None = None
+    community_text_prompt: str | None = None
+
+
+@dataclass
 class ExtractGraphDefaults:
     """Default values for extracting graph."""
 
@@ -461,6 +482,9 @@ class GraphRagConfigDefaults:
     )
     cache: CacheDefaults = field(default_factory=CacheDefaults)
     input: InputDefaults = field(default_factory=InputDefaults)
+    domain_intelligence: DomainIntelligenceDefaults = field(
+        default_factory=DomainIntelligenceDefaults
+    )
     embed_graph: EmbedGraphDefaults = field(default_factory=EmbedGraphDefaults)
     embed_text: EmbedTextDefaults = field(default_factory=EmbedTextDefaults)
     chunks: ChunksDefaults = field(default_factory=ChunksDefaults)

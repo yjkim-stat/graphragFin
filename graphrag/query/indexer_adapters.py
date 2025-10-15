@@ -55,6 +55,9 @@ def read_indexer_covariates(final_covariates: pd.DataFrame) -> list[Covariate]:
             "start_date",
             "end_date",
             "description",
+            "domain_profile",
+            "subject_domain_tags",
+            "subject_domain_primary_tag",
         ],
         text_unit_ids_col=None,
     )
@@ -163,6 +166,12 @@ def read_indexer_entities(
         subset=["id"]
     )
     # read entity dataframe to knowledge model objects
+    attribute_cols = [
+        column
+        for column in ["domain_profile", "domain_tags", "domain_primary_tag"]
+        if column in final_df.columns
+    ]
+
     return read_entities(
         df=final_df,
         id_col="id",
@@ -175,6 +184,7 @@ def read_indexer_entities(
         name_embedding_col=None,
         description_embedding_col="description_embedding",
         text_unit_ids_col="text_unit_ids",
+        attributes_cols=attribute_cols or None,
     )
 
 

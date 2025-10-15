@@ -1,0 +1,16 @@
+# Enable the built-in finance profile and extend it with a custom rule.
+domain_intelligence:
+  enabled: true
+  profile: finance
+  domain: "Metals and Energy"
+  covariate_type: finance_factor
+  entity_rules:
+    - tag: battery_material
+      keywords:
+        - lithium
+        - cobalt
+        - nickel
+      priority: 5
+      primary: true
+  # Optional prompt override stored relative to the project root.
+  # covariate_prompt: prompts/domain/finance-claims.txt

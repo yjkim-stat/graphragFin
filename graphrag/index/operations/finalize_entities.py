@@ -48,6 +48,9 @@ def finalize_entities(
     final_entities["id"] = final_entities["human_readable_id"].apply(
         lambda _x: str(uuid4())
     )
+    for column in ("domain_profile", "domain_tags", "domain_primary_tag"):
+        if column not in final_entities.columns:
+            final_entities[column] = None
     return final_entities.loc[
         :,
         ENTITIES_FINAL_COLUMNS,
