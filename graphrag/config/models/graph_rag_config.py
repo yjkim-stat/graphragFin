@@ -19,6 +19,9 @@ from graphrag.config.models.chunking_config import ChunkingConfig
 from graphrag.config.models.cluster_graph_config import ClusterGraphConfig
 from graphrag.config.models.community_reports_config import CommunityReportsConfig
 from graphrag.config.models.drift_search_config import DRIFTSearchConfig
+from graphrag.config.models.domain_intelligence_config import (
+    DomainIntelligenceConfig,
+)
 from graphrag.config.models.embed_graph_config import EmbedGraphConfig
 from graphrag.config.models.extract_claims_config import ClaimExtractionConfig
 from graphrag.config.models.extract_graph_config import ExtractGraphConfig
@@ -37,6 +40,7 @@ from graphrag.config.models.summarize_descriptions_config import (
 from graphrag.config.models.text_embedding_config import TextEmbeddingConfig
 from graphrag.config.models.umap_config import UmapConfig
 from graphrag.config.models.vector_store_config import VectorStoreConfig
+from graphrag.domain.context import DomainContext
 from graphrag.language_model.providers.litellm.services.rate_limiter.rate_limiter_factory import (
     RateLimiterFactory,
 )
@@ -75,6 +79,11 @@ class GraphRagConfig(BaseModel):
     models: dict[str, LanguageModelConfig] = Field(
         description="Available language model configurations.",
         default=graphrag_config_defaults.models,
+    )
+
+    domain_intelligence: DomainIntelligenceConfig = Field(
+        description="Domain intelligence enrichment settings.",
+        default=DomainIntelligenceConfig(),
     )
 
     def _validate_models(self) -> None:
@@ -351,6 +360,11 @@ class GraphRagConfig(BaseModel):
         """Validate the factories used in the configuration."""
         self._validate_retry_services()
         self._validate_rate_limiter_services()
+
+    def resolved_domain_context(self) -> DomainContext | None:
+        """Resolve the configured domain intelligence context, if enabled."""
+
+        return self.domain_intelligence.resolved(self.root_dir)
 
     def get_language_model_config(self, model_id: str) -> LanguageModelConfig:
         """Get a model configuration by ID.

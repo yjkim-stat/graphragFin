@@ -44,6 +44,12 @@ def _group_and_resolve_entities(
     delta_entities_df["human_readable_id"] = np.arange(
         initial_id, initial_id + len(delta_entities_df)
     )
+    for column in ("domain_profile", "domain_tags", "domain_primary_tag"):
+        if column not in old_entities_df.columns:
+            old_entities_df[column] = None
+        if column not in delta_entities_df.columns:
+            delta_entities_df[column] = None
+
     # Concat A and B
     combined = pd.concat(
         [old_entities_df, delta_entities_df], ignore_index=True, copy=False
@@ -62,6 +68,9 @@ def _group_and_resolve_entities(
             "degree": "first",  # todo: we could probably re-compute this with the entire new graph
             "x": "first",
             "y": "first",
+            "domain_profile": "first",
+            "domain_tags": "first",
+            "domain_primary_tag": "first",
         })
         .reset_index()
     )

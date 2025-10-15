@@ -37,6 +37,65 @@ To use LiteLLM one must
 
 See [Detailed Configuration](yaml.md) for more details on configuration. [View LiteLLm basic usage](https://docs.litellm.ai/docs/#basic-usage) for details on how models are called (The `model_provider` is the portion prior to `/` while the `model` is the portion following the `/`).
 
+## Hugging Face Inference API
+
+GraphRAG now ships with native providers for Hugging Face's [Inference API](https://huggingface.co/docs/api-inference/index). These providers bypass LiteLLM and speak directly to the Hugging Face endpoints so you can use any hosted model that exposes the `text-generation`, `chat-completion`, or `feature-extraction` tasks.
+
+To configure a Hugging Face hosted model you will need an [API token](https://huggingface.co/docs/api-inference/quicktour#get-your-api-token). Set it in your environment (for example `export HUGGINGFACEHUB_API_TOKEN=hf_xxx`) and reference the token via `${}` substitution in your `settings.yaml`.
+
+```yaml
+models:
+  default_chat_model:
+    type: huggingface_chat
+    auth_type: api_key
+    api_key: ${HUGGINGFACEHUB_API_TOKEN}
+    model: meta-llama/Meta-Llama-3-8B-Instruct
+    huggingface_task: chat-completion
+    huggingface_parameters:
+      max_new_tokens: 512
+      temperature: 0.3
+  default_embedding_model:
+    type: huggingface_embedding
+    auth_type: api_key
+    api_key: ${HUGGINGFACEHUB_API_TOKEN}
+    model: sentence-transformers/all-MiniLM-L6-v2
+    huggingface_parameters:
+      normalize: true
+```
+
+Key details:
+
+- `type` must be set to `huggingface_chat` or `huggingface_embedding` to activate the new providers.
+- `model` accepts any valid model repo slug. Use `deployment_name` if your endpoint expects a different identifier.
+- `huggingface_task` is optional for chat models. When omitted the provider defaults to the `text-generation` task, which works with instruct-tuned models that expect a single prompt string.
+- `huggingface_parameters` lets you forward any task-specific settings (for example `max_new_tokens`, `temperature`, or embedding post-processing flags). These are merged with GraphRAG's standard language model parameters so you can still override values per call when needed.
+
+With this configuration you can reference the models by `model_id` anywhere in your indexing or query pipelines just like the existing OpenAI and LiteLLM-backed models.
+
+A ready-to-use starter file can be copied from [`docs/config/examples/huggingface-settings.yaml`](examples/huggingface-settings.yaml).
+
+## Domain intelligence enrichment
+
+GraphRAG can optionally layer domain-specific intelligence over the indexed graph. The `domain_intelligence` block controls this behaviour and is disabled by default so existing pipelines continue to behave exactly as before. Enabling it unlocks three capabilities:
+
+- **Entity tagging** – entities receive additional metadata columns (`domain_profile`, `domain_tags`, `domain_primary_tag`) that capture which taxonomy buckets they belong to. These tags surface in local search context tables and downstream analytics.
+- **Covariate targeting** – the claim extraction workflow can swap in domain-aware prompts and claim descriptions, emit a custom `covariate_type`, and attach the entity tags back onto each covariate (`subject_domain_tags`, `subject_domain_primary_tag`).
+- **Community prompts** – graph and text based community summaries can reuse finance-focused prompt templates that emphasise catalysts, horizons, and price impact.
+
+```yaml
+domain_intelligence:
+  enabled: true
+  profile: finance            # use the built-in commodities & futures profile
+  domain: "Metals and Energy"  # override the label used in prompts and outputs
+  entity_rules:
+    - tag: battery_material
+      keywords: [lithium, cobalt, nickel]
+      priority: 5
+      primary: true
+```
+
+Profiles bundle prompts, covariate defaults, and an initial rule set. The bundled `finance` profile focuses on commodities and futures; additional rules can be appended to tailor the taxonomy for your dataset. Custom prompts may be supplied by pointing `covariate_prompt`, `community_graph_prompt`, or `community_text_prompt` to files relative to the project root. See [`domain-intelligence-finance.yaml`](examples/domain-intelligence-finance.yaml) for a complete example.
+
 ## Model Selection Considerations
 
 GraphRAG has been most thoroughly tested with the gpt-4 series of models from OpenAI, including gpt-4 gpt-4-turbo, gpt-4o, and gpt-4o-mini. Our [arXiv paper](https://arxiv.org/abs/2404.16130), for example, performed quality evaluation using gpt-4-turbo. As stated above, non-OpenAI models are now supported with GraphRAG 2.6.0 and onwards through the use of LiteLLM but the suite of gpt-4 series of models from OpenAI remain the most tested and supported suite of models for GraphRAG.

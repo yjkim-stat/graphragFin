@@ -54,6 +54,9 @@ This is the list of summarized reports for each community.
 | type           | str  | Nature of the claim type. |
 | description    | str  | LM-generated description of the behavior. |
 | subject_id     | str  | Name of the source entity (that is performing the claimed behavior). |
+| domain_profile | str  | Domain profile label attached to the subject when domain intelligence is enabled. |
+| subject_domain_tags | str[] | List of domain tags inherited from the subject entity. |
+| subject_domain_primary_tag | str | Primary domain tag inherited from the subject entity. |
 | object_id      | str  | Name of the target entity (that the claimed behavior is performed on). |
 | status         | str  | LM-derived assessment of the correctness of the claim. One of [TRUE, FALSE, SUSPECTED] |
 | start_date     | str  | LM-derived start of the claimed activity. ISO8601 |
@@ -84,6 +87,9 @@ List of all entities found in the data by the LM.
 | degree        | int   | Node degree (connectedness) in the graph. |
 | x             | float | X position of the node for visual layouts. If graph embeddings and UMAP are not turned on, this will be 0. |
 | y             | float | Y position of the node for visual layouts. If graph embeddings and UMAP are not turned on, this will be 0. |
+| domain_profile | str  | Domain profile label applied when domain intelligence is enabled. |
+| domain_tags    | str[] | List of matched domain tags for the entity. |
+| domain_primary_tag | str | Highest-priority domain tag for the entity. |
 
 ## relationships
 List of all entity-to-entity relationships found in the data by the LM. This is also the _edge list_ for the graph.

@@ -16,6 +16,11 @@ from graphrag.index.operations.snapshot_graphml import snapshot_graphml
 from graphrag.index.typing.context import PipelineRunContext
 from graphrag.index.typing.workflow import WorkflowFunctionOutput
 from graphrag.utils.storage import load_table_from_storage, write_table_to_storage
+from graphrag.domain.context import DomainContext
+from graphrag.domain.enrichment import (
+    apply_domain_rules,
+    ensure_entity_domain_columns,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,7 @@ async def run_workflow(
         relationships,
         embed_config=config.embed_graph,
         layout_enabled=config.umap.enabled,
+        domain_context=config.resolved_domain_context(),
     )
 
     await write_table_to_storage(final_entities, "entities", context.output_storage)
@@ -67,10 +73,14 @@ def finalize_graph(
     relationships: pd.DataFrame,
     embed_config: EmbedGraphConfig | None = None,
     layout_enabled: bool = False,
+    domain_context: DomainContext | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """All the steps to finalize the entity and relationship formats."""
     final_entities = finalize_entities(
         entities, relationships, embed_config, layout_enabled
     )
+    final_entities = ensure_entity_domain_columns(final_entities, domain_context)
+    if domain_context:
+        final_entities = apply_domain_rules(final_entities, domain_context)
     final_relationships = finalize_relationships(relationships)
     return (final_entities, final_relationships)

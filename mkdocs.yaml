@@ -25,6 +25,7 @@ nav:
       - Welcome: "index.md"
       - Getting Started: "get_started.md"
       - Development Guide: "developing.md"
+      - Baseline Consolidation & Observability: "developing/baseline_consolidation.md"
   - Indexing:
       - Overview: "index/overview.md"
       - Architecture: "index/architecture.md"

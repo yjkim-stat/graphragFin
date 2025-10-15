@@ -59,8 +59,11 @@ async def run_workflow(
     )
     async_mode = community_reports_llm_settings.async_mode
     num_threads = community_reports_llm_settings.concurrent_requests
+    domain_context = config.resolved_domain_context()
     summarization_strategy = config.community_reports.resolved_strategy(
-        config.root_dir, community_reports_llm_settings
+        config.root_dir,
+        community_reports_llm_settings,
+        domain_context=domain_context,
     )
 
     output = await create_community_reports(

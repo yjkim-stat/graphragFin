@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from graphrag.config.defaults import graphrag_config_defaults
 from graphrag.config.models.language_model_config import LanguageModelConfig
+from graphrag.domain.context import DomainContext
 
 
 class CommunityReportsConfig(BaseModel):
@@ -40,26 +41,40 @@ class CommunityReportsConfig(BaseModel):
     )
 
     def resolved_strategy(
-        self, root_dir: str, model_config: LanguageModelConfig
+        self,
+        root_dir: str,
+        model_config: LanguageModelConfig,
+        domain_context: DomainContext | None = None,
     ) -> dict:
         """Get the resolved community report extraction strategy."""
         from graphrag.index.operations.summarize_communities.typing import (
             CreateCommunityReportsStrategyType,
         )
 
-        return self.strategy or {
+        if self.strategy:
+            return self.strategy
+
+        graph_prompt_override = None
+        if domain_context and domain_context.community_graph_prompt:
+            graph_prompt_override = domain_context.community_graph_prompt
+        elif self.graph_prompt:
+            graph_prompt_override = (Path(root_dir) / self.graph_prompt).read_text(
+                encoding="utf-8"
+            )
+
+        text_prompt_override = None
+        if domain_context and domain_context.community_text_prompt:
+            text_prompt_override = domain_context.community_text_prompt
+        elif self.text_prompt:
+            text_prompt_override = (Path(root_dir) / self.text_prompt).read_text(
+                encoding="utf-8"
+            )
+
+        return {
             "type": CreateCommunityReportsStrategyType.graph_intelligence,
             "llm": model_config.model_dump(),
-            "graph_prompt": (Path(root_dir) / self.graph_prompt).read_text(
-                encoding="utf-8"
-            )
-            if self.graph_prompt
-            else None,
-            "text_prompt": (Path(root_dir) / self.text_prompt).read_text(
-                encoding="utf-8"
-            )
-            if self.text_prompt
-            else None,
+            "graph_prompt": graph_prompt_override,
+            "text_prompt": text_prompt_override,
             "max_report_length": self.max_length,
             "max_input_length": self.max_input_length,
         }

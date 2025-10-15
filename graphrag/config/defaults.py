@@ -3,6 +3,7 @@
 
 """Common default configuration values."""
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,16 +45,29 @@ from graphrag.language_model.providers.litellm.services.retry.random_wait_retry 
 )
 from graphrag.language_model.providers.litellm.services.retry.retry import Retry
 
+def _env_or_default(env_var: str, default: str) -> str:
+    """Return an environment configured default or fall back to the provided value."""
+
+    value = os.getenv(env_var)
+    if value is None:
+        return default
+
+    stripped = value.strip()
+    return stripped or default
+
+
 DEFAULT_OUTPUT_BASE_DIR = "output"
 DEFAULT_CHAT_MODEL_ID = "default_chat_model"
 DEFAULT_CHAT_MODEL_TYPE = ModelType.Chat
-DEFAULT_CHAT_MODEL = "gpt-4-turbo-preview"
+DEFAULT_CHAT_MODEL = _env_or_default("GRAPHRAG_DEFAULT_CHAT_MODEL", "gpt-4-turbo-preview")
 DEFAULT_CHAT_MODEL_AUTH_TYPE = AuthType.APIKey
 DEFAULT_EMBEDDING_MODEL_ID = "default_embedding_model"
 DEFAULT_EMBEDDING_MODEL_TYPE = ModelType.Embedding
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_EMBEDDING_MODEL = _env_or_default(
+    "GRAPHRAG_DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"
+)
 DEFAULT_EMBEDDING_MODEL_AUTH_TYPE = AuthType.APIKey
-DEFAULT_MODEL_PROVIDER = "openai"
+DEFAULT_MODEL_PROVIDER = _env_or_default("GRAPHRAG_DEFAULT_MODEL_PROVIDER", "openai")
 DEFAULT_VECTOR_STORE_ID = "default_vector_store"
 
 ENCODING_MODEL = "cl100k_base"
@@ -197,6 +211,27 @@ class ExtractClaimsDefaults:
     max_gleanings: int = 1
     strategy: None = None
     model_id: str = DEFAULT_CHAT_MODEL_ID
+
+
+@dataclass
+class DomainIntelligenceDefaults:
+    """Default values for domain intelligence enrichment."""
+
+    enabled: bool = False
+    profile: str | None = None
+    domain: str | None = None
+    entity_tag_column: str = "domain_tags"
+    entity_primary_column: str | None = "domain_primary_tag"
+    entity_profile_column: str | None = "domain_profile"
+    covariate_type: str | None = None
+    covariate_entity_types: list[str] | None = None
+    covariate_description: str | None = None
+    covariate_prompt: str | None = None
+    covariate_subject_tags_column: str = "subject_domain_tags"
+    covariate_primary_tag_column: str | None = "subject_domain_primary_tag"
+    covariate_profile_column: str | None = "domain_profile"
+    community_graph_prompt: str | None = None
+    community_text_prompt: str | None = None
 
 
 @dataclass
@@ -447,6 +482,9 @@ class GraphRagConfigDefaults:
     )
     cache: CacheDefaults = field(default_factory=CacheDefaults)
     input: InputDefaults = field(default_factory=InputDefaults)
+    domain_intelligence: DomainIntelligenceDefaults = field(
+        default_factory=DomainIntelligenceDefaults
+    )
     embed_graph: EmbedGraphDefaults = field(default_factory=EmbedGraphDefaults)
     embed_text: EmbedTextDefaults = field(default_factory=EmbedTextDefaults)
     chunks: ChunksDefaults = field(default_factory=ChunksDefaults)

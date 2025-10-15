@@ -41,7 +41,7 @@ models:
 
 - `api_key` **str** - The OpenAI API key to use.
 - `auth_type` **api_key|azure_managed_identity** - Indicate how you want to authenticate requests.
-- `type` **chat**|**embedding**|**openai_chat|azure_openai_chat|openai_embedding|azure_openai_embedding|mock_chat|mock_embeddings** - The type of LLM to use.
+- `type` **chat**|**embedding**|**openai_chat|azure_openai_chat|openai_embedding|azure_openai_embedding|huggingface_chat|huggingface_embedding|mock_chat|mock_embeddings** - The type of LLM to use.
 - `model_provider` **str|None** - The model provider to use, e.g., openai, azure, anthropic, etc. Required when `type == chat|embedding`. When `type == chat|embedding`, [LiteLLM](https://docs.litellm.ai/) is used under the hood which has support for calling 100+ models. [View LiteLLm basic usage](https://docs.litellm.ai/docs/#basic-usage) for details on how models are called (The `model_provider` is the portion prior to `/` while the `model` is the portion following the `/`). [View Language Model Selection](models.md) for more details and examples on using LiteLLM.
 - `model` **str** - The model name.
 - `encoding_model` **str** - The text encoding model to use. Default is to use the encoding model aligned with the language model (i.e., it is retrieved from tiktoken if unset).
@@ -51,6 +51,8 @@ models:
 - `organization` **str** - The client organization.
 - `proxy` **str** - The proxy URL to use.
 - `audience` **str** - (Azure OpenAI only) The URI of the target Azure resource/service for which a managed identity token is requested. Used if `api_key` is not defined. Default=`https://cognitiveservices.azure.com/.default`
+- `huggingface_task` **str** - Optional task hint (`text-generation`, `chat-completion`, etc.) when using the Hugging Face providers.
+- `huggingface_parameters` **dict** - Extra request parameters forwarded directly to the Hugging Face inference endpoints.
 - `model_supports_json` **bool** - Whether the model supports JSON-mode output.
 - `request_timeout` **float** - The per-request timeout.
 - `tokens_per_minute` **int** - Set a leaky-bucket throttle on tokens-per-minute.
@@ -92,6 +94,22 @@ Our pipeline can ingest .csv, .txt, or .json data from an input location. See th
 - `text_column` **str** - (CSV/JSON only) The text column name. If unset we expect a column named `text`.
 - `title_column` **str** - (CSV/JSON only) The title column name, filename will be used if unset.
 - `metadata` **list[str]** - (CSV/JSON only) The additional document attributes fields to keep.
+
+### domain_intelligence
+
+This block enables optional domain-aware enrichment during indexing and query.
+
+- `enabled` **bool** – Master flag to turn the feature on.
+- `profile` **str|None** – Name of a built-in profile (`finance` today) bundling prompts and rules.
+- `domain` **str|None** – Override the human-readable name written to outputs and prompts.
+- `entity_rules` **list[dict]** – Custom tagging rules appended after the profile rules. Each rule supports `tag`, `match_types`, `keywords`, `match_titles`, `priority`, and `primary`.
+- `covariate_type` **str|None** – Override the `covariate_type` emitted by the claim extractor.
+- `covariate_entity_types` **list[str]|None** – Restrict claim extraction to these entity types.
+- `covariate_description` **str|None** – Replace the default claim description passed to the extractor.
+- `covariate_prompt` **str|None** – Path or literal prompt string for claim extraction.
+- `community_graph_prompt` / `community_text_prompt` **str|None** – Path or literal prompt string for community summarisation.
+- `covariate_subject_tags_column`, `covariate_primary_tag_column`, `covariate_profile_column` **str** – Customise the names of the metadata columns added to covariates.
+- `entity_tag_column`, `entity_primary_column`, `entity_profile_column` **str** – Customise the names of the metadata columns added to entities.
 
 ### chunks
 

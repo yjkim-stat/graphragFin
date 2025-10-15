@@ -1,0 +1,34 @@
+# Example GraphRAG configuration using Hugging Face providers.
+# Copy this file to `<project>/settings.yaml` and replace the model slugs
+# with ones that match your use case. The `${HUGGINGFACEHUB_API_TOKEN}`
+# placeholder will be expanded from your environment at runtime.
+
+models:
+  default_chat_model:
+    type: huggingface_chat
+    auth_type: api_key
+    api_key: ${HUGGINGFACEHUB_API_TOKEN}
+    model: meta-llama/Meta-Llama-3-8B-Instruct
+    huggingface_task: chat-completion
+    huggingface_parameters:
+      max_new_tokens: 512
+      temperature: 0.3
+  default_embedding_model:
+    type: huggingface_embedding
+    auth_type: api_key
+    api_key: ${HUGGINGFACEHUB_API_TOKEN}
+    model: sentence-transformers/all-MiniLM-L6-v2
+
+input:
+  storage:
+    type: file
+    base_dir: input
+  file_type: text
+
+output:
+  storage:
+    type: file
+    base_dir: output
+
+workflows:
+  - standard

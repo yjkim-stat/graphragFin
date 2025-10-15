@@ -14,6 +14,10 @@ from graphrag.callbacks.workflow_callbacks import WorkflowCallbacks
 from graphrag.config.enums import AsyncType
 from graphrag.config.models.graph_rag_config import GraphRagConfig
 from graphrag.data_model.schemas import COVARIATES_FINAL_COLUMNS
+from graphrag.domain.enrichment import (
+    annotate_covariates_with_entity_domains,
+    ensure_covariate_domain_columns,
+)
 from graphrag.index.operations.extract_covariates.extract_covariates import (
     extract_covariates as extractor,
 )
@@ -31,6 +35,7 @@ async def run_workflow(
     """All the steps to extract and format covariates."""
     logger.info("Workflow started: extract_covariates")
     output = None
+    domain_context = config.resolved_domain_context()
     if config.extract_claims.enabled:
         text_units = await load_table_from_storage("text_units", context.output_storage)
 
@@ -38,22 +43,41 @@ async def run_workflow(
             config.extract_claims.model_id
         )
         extraction_strategy = config.extract_claims.resolved_strategy(
-            config.root_dir, extract_claims_llm_settings
+            config.root_dir,
+            extract_claims_llm_settings,
+            domain_context=domain_context,
         )
 
         async_mode = extract_claims_llm_settings.async_mode
         num_threads = extract_claims_llm_settings.concurrent_requests
 
+        entity_types = None
+        if domain_context and domain_context.wants_covariate_entity_types():
+            entity_types = list(domain_context.covariate_entity_types)
+
+        covariate_type = (
+            domain_context.covariate_type
+            if domain_context and domain_context.wants_covariate_type_override()
+            else "claim"
+        )
+
         output = await extract_covariates(
             text_units,
             context.callbacks,
             context.cache,
-            "claim",
+            covariate_type,
             extraction_strategy,
             async_mode=async_mode,
-            entity_types=None,
+            entity_types=entity_types,
             num_threads=num_threads,
         )
+
+        output = ensure_covariate_domain_columns(output, domain_context)
+        if domain_context and domain_context.has_entity_rules():
+            entities = await load_table_from_storage("entities", context.output_storage)
+            output = annotate_covariates_with_entity_domains(
+                output, entities, domain_context
+            )
 
         await write_table_to_storage(output, "covariates", context.output_storage)
 
@@ -89,5 +113,9 @@ async def extract_covariates(
     text_units.drop(columns=["text_unit_id"], inplace=True)  # don't pollute the global
     covariates["id"] = covariates["covariate_type"].apply(lambda _x: str(uuid4()))
     covariates["human_readable_id"] = covariates.index
+
+    for column in ("domain_profile", "subject_domain_tags", "subject_domain_primary_tag"):
+        if column not in covariates.columns:
+            covariates[column] = None
 
     return covariates.loc[:, COVARIATES_FINAL_COLUMNS]
