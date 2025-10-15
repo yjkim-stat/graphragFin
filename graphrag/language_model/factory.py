@@ -14,6 +14,10 @@ from graphrag.language_model.providers.fnllm.models import (
     OpenAIChatFNLLM,
     OpenAIEmbeddingFNLLM,
 )
+from graphrag.language_model.providers.huggingface import (
+    HuggingFaceChatModel,
+    HuggingFaceEmbeddingModel,
+)
 from graphrag.language_model.providers.litellm.chat_model import LitellmChatModel
 from graphrag.language_model.providers.litellm.embedding_model import (
     LitellmEmbeddingModel,
@@ -110,6 +114,10 @@ ModelFactory.register_chat(
     ModelType.OpenAIChat.value, lambda **kwargs: OpenAIChatFNLLM(**kwargs)
 )
 ModelFactory.register_chat(ModelType.Chat, lambda **kwargs: LitellmChatModel(**kwargs))
+ModelFactory.register_chat(
+    ModelType.HuggingFaceChat.value,
+    lambda **kwargs: HuggingFaceChatModel(**kwargs),
+)
 
 ModelFactory.register_embedding(
     ModelType.AzureOpenAIEmbedding.value,
@@ -120,4 +128,8 @@ ModelFactory.register_embedding(
 )
 ModelFactory.register_embedding(
     ModelType.Embedding, lambda **kwargs: LitellmEmbeddingModel(**kwargs)
+)
+ModelFactory.register_embedding(
+    ModelType.HuggingFaceEmbedding.value,
+    lambda **kwargs: HuggingFaceEmbeddingModel(**kwargs),
 )
