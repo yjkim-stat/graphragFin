@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
 from graphrag.language_model.factory import ModelFactory
+from graphrag.config.enums import ModelType
 from graphrag.language_model.manager import ModelManager
 from graphrag.language_model.response.base import (
     BaseModelOutput,
@@ -95,3 +96,8 @@ async def test_create_custom_embedding_llm():
 
     response = llm.embed_batch(["text"])
     assert response == [[1.0]]
+
+
+def test_huggingface_models_registered() -> None:
+    assert ModelType.HuggingFaceChat.value in ModelFactory.get_chat_models()
+    assert ModelType.HuggingFaceEmbedding.value in ModelFactory.get_embedding_models()

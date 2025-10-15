@@ -4,7 +4,7 @@
 """Language model configuration."""
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 import tiktoken
 from pydantic import BaseModel, Field, model_validator
@@ -110,6 +110,15 @@ class LanguageModelConfig(BaseModel):
     model_provider: str | None = Field(
         description="The model provider to use.",
         default=language_model_defaults.model_provider,
+    )
+
+    huggingface_task: str | None = Field(
+        description="Optional task hint for Hugging Face providers (e.g., 'chat-completion').",
+        default=None,
+    )
+    huggingface_parameters: dict[str, Any] | None = Field(
+        description="Extra parameters forwarded to Hugging Face inference calls.",
+        default=None,
     )
 
     def _validate_model_provider(self) -> None:

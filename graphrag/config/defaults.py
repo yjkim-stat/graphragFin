@@ -3,6 +3,7 @@
 
 """Common default configuration values."""
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,16 +45,29 @@ from graphrag.language_model.providers.litellm.services.retry.random_wait_retry 
 )
 from graphrag.language_model.providers.litellm.services.retry.retry import Retry
 
+def _env_or_default(env_var: str, default: str) -> str:
+    """Return an environment configured default or fall back to the provided value."""
+
+    value = os.getenv(env_var)
+    if value is None:
+        return default
+
+    stripped = value.strip()
+    return stripped or default
+
+
 DEFAULT_OUTPUT_BASE_DIR = "output"
 DEFAULT_CHAT_MODEL_ID = "default_chat_model"
 DEFAULT_CHAT_MODEL_TYPE = ModelType.Chat
-DEFAULT_CHAT_MODEL = "gpt-4-turbo-preview"
+DEFAULT_CHAT_MODEL = _env_or_default("GRAPHRAG_DEFAULT_CHAT_MODEL", "gpt-4-turbo-preview")
 DEFAULT_CHAT_MODEL_AUTH_TYPE = AuthType.APIKey
 DEFAULT_EMBEDDING_MODEL_ID = "default_embedding_model"
 DEFAULT_EMBEDDING_MODEL_TYPE = ModelType.Embedding
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_EMBEDDING_MODEL = _env_or_default(
+    "GRAPHRAG_DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"
+)
 DEFAULT_EMBEDDING_MODEL_AUTH_TYPE = AuthType.APIKey
-DEFAULT_MODEL_PROVIDER = "openai"
+DEFAULT_MODEL_PROVIDER = _env_or_default("GRAPHRAG_DEFAULT_MODEL_PROVIDER", "openai")
 DEFAULT_VECTOR_STORE_ID = "default_vector_store"
 
 ENCODING_MODEL = "cl100k_base"
