@@ -1,14 +1,20 @@
-"""Embedding model implementation for Hugging Face Inference endpoints."""
+"""Embedding model implementation for local Hugging Face transformers models."""
 from __future__ import annotations
+
+import asyncio
 import os
 
 from typing import TYPE_CHECKING, Any
 
+try:
+    import torch
+except ImportError as exc:  # pragma: no cover - import guard
+    msg = "PyTorch is required to run local Hugging Face models. Install it with `pip install torch`."
+    raise ImportError(msg) from exc
+
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from graphrag.cache.pipeline_cache import PipelineCache
     from graphrag.config.models.language_model_config import LanguageModelConfig
-    from huggingface_hub import AsyncInferenceClient, InferenceClient
-    from huggingface_hub.utils import InferenceTimeoutError
 
 
 class HuggingFaceEmbeddingModel:
@@ -23,12 +29,11 @@ class HuggingFaceEmbeddingModel:
         feature_kwargs: dict[str, Any] | None = None,
     ) -> None:
         try:
-            from huggingface_hub import AsyncInferenceClient, InferenceClient
-            from huggingface_hub.utils import InferenceTimeoutError
+            from transformers import pipeline  # pylint: disable=import-outside-toplevel
         except ImportError as exc:  # pragma: no cover - import guard
             msg = (
-                "huggingface-hub is required to use the Hugging Face model providers. "
-                "Install it with `pip install huggingface-hub`."
+                "transformers is required to use the Hugging Face model providers. "
+                "Install it with `pip install transformers`."
             )
             raise ImportError(msg) from exc
 
@@ -37,18 +42,33 @@ class HuggingFaceEmbeddingModel:
         self.cache = cache.child(self.name) if cache else None
 
         model = config.deployment_name or config.model
-        timeout = config.request_timeout or None
-        base_url = config.api_base or None
+        cache_dir = os.getenv("CACHE_DIR") or None
 
-        client_kwargs: dict[str, Any] = {"token": config.api_key, "timeout": timeout, "cache_dir":os.getenv('CACHE_DIR')}
-        if base_url:
-            client_kwargs["base_url"] = base_url.rstrip("/")
+        raw_params = dict(
+            feature_kwargs or getattr(config, "huggingface_parameters", None) or {}
+        )
+        pipeline_kwargs = raw_params.pop("pipeline_kwargs", {})
+        tokenizer_kwargs = raw_params.pop("tokenizer_kwargs", {})
+        model_kwargs = raw_params.pop("model_kwargs", {})
 
-        self._client = InferenceClient(model=model, **client_kwargs)
-        self._aclient = AsyncInferenceClient(model=model, **client_kwargs)
-        self._timeout_error = InferenceTimeoutError
+        if cache_dir:
+            tokenizer_kwargs.setdefault("cache_dir", cache_dir)
+            model_kwargs.setdefault("cache_dir", cache_dir)
 
-        self._feature_kwargs = feature_kwargs or getattr(config, "huggingface_parameters", None) or {}
+        pipeline_kwargs = dict(pipeline_kwargs)
+        if "device" not in pipeline_kwargs:
+            pipeline_kwargs["device"] = 0 if torch.cuda.is_available() else -1
+
+        self._pipeline = pipeline(
+            "feature-extraction",
+            model=model,
+            tokenizer=model,
+            model_kwargs=model_kwargs,
+            tokenizer_kwargs=tokenizer_kwargs,
+            **pipeline_kwargs,
+        )
+
+        self._feature_kwargs = raw_params
 
     def _normalize_embedding(self, data: Any) -> list[float]:
         if data is None:
@@ -63,24 +83,14 @@ class HuggingFaceEmbeddingModel:
         return [float(vector)]
 
     def embed(self, text: str, **kwargs: Any) -> list[float]:
-        try:
-            embedding = self._client.feature_extraction(
-                text,
-                **{**self._feature_kwargs, **kwargs},
-            )
-            return self._normalize_embedding(embedding)
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        embedding = self._pipeline(
+            text,
+            **{**self._feature_kwargs, **kwargs},
+        )
+        return self._normalize_embedding(embedding)
 
     async def aembed(self, text: str, **kwargs: Any) -> list[float]:
-        try:
-            embedding = await self._aclient.feature_extraction(
-                text,
-                **{**self._feature_kwargs, **kwargs},
-            )
-            return self._normalize_embedding(embedding)
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        return await asyncio.to_thread(self.embed, text, **kwargs)
 
     def embed_batch(self, text_list: list[str], **kwargs: Any) -> list[list[float]]:
         return [self.embed(text, **kwargs) for text in text_list]

@@ -1,10 +1,18 @@
-"""Chat model implementation for Hugging Face Inference endpoints."""
+"""Chat model implementation for local Hugging Face transformers models."""
 from __future__ import annotations
+
+import asyncio
 import os
+from threading import Thread
 
 from collections.abc import AsyncGenerator, Generator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
+try:
+    import torch
+except ImportError as exc:  # pragma: no cover - import guard
+    msg = "PyTorch is required to run local Hugging Face models. Install it with `pip install torch`."
+    raise ImportError(msg) from exc
 from pydantic import BaseModel
 
 from graphrag.language_model.response.base import (
@@ -15,8 +23,6 @@ from graphrag.language_model.response.base import (
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from graphrag.cache.pipeline_cache import PipelineCache
     from graphrag.config.models.language_model_config import LanguageModelConfig
-    from huggingface_hub import AsyncInferenceClient, InferenceClient
-    from huggingface_hub.utils import InferenceTimeoutError
 
 
 class HuggingFaceModelOutput(BaseModelOutput):
@@ -40,11 +46,15 @@ class HuggingFaceChatModel:
         generation_kwargs: dict[str, Any] | None = None,
     ) -> None:
         try:
-            from huggingface_hub import AsyncInferenceClient, InferenceClient, InferenceTimeoutError
+            from transformers import (  # pylint: disable=import-outside-toplevel
+                AutoModelForCausalLM,
+                AutoTokenizer,
+                TextIteratorStreamer,
+            )
         except ImportError as exc:  # pragma: no cover - import guard
             msg = (
-                "huggingface-hub is required to use the Hugging Face model providers. "
-                "Install it with `pip install huggingface-hub`."
+                "transformers is required to use the Hugging Face model providers. "
+                "Install it with `pip install transformers`."
             )
             raise ImportError(msg) from exc
 
@@ -53,20 +63,31 @@ class HuggingFaceChatModel:
         self.cache = cache.child(self.name) if cache else None
 
         model = config.deployment_name or config.model
-        timeout = config.request_timeout or None
-        base_url = config.api_base or None
-
-        client_kwargs: dict[str, Any] = {"token": config.api_key, "timeout": timeout, "cache_dir":os.getenv('CACHE_DIR')}
-        if base_url:
-            client_kwargs["base_url"] = base_url.rstrip("/")
-
-        self._client = InferenceClient(model=model, **client_kwargs)
-        self._aclient = AsyncInferenceClient(model=model, **client_kwargs)
-        self._timeout_error = InferenceTimeoutError
+        cache_dir = os.getenv("CACHE_DIR") or None
 
         self.task = task or getattr(config, "huggingface_task", None) or "text-generation"
-        user_params = generation_kwargs or getattr(config, "huggingface_parameters", None) or {}
-        self._generation_kwargs = self._resolve_generation_kwargs(user_params)
+        raw_params = dict(
+            generation_kwargs or getattr(config, "huggingface_parameters", None) or {}
+        )
+        tokenizer_kwargs = raw_params.pop("tokenizer_kwargs", {})
+        model_kwargs = raw_params.pop("model_kwargs", {})
+        self._streamer_factory: Callable[..., TextIteratorStreamer] = TextIteratorStreamer
+
+        if cache_dir:
+            tokenizer_kwargs.setdefault("cache_dir", cache_dir)
+            model_kwargs.setdefault("cache_dir", cache_dir)
+
+        self._tokenizer = AutoTokenizer.from_pretrained(model, **tokenizer_kwargs)
+        if self._tokenizer.pad_token is None and self._tokenizer.eos_token is not None:
+            self._tokenizer.pad_token = self._tokenizer.eos_token
+
+        self._model = AutoModelForCausalLM.from_pretrained(model, **model_kwargs)
+        self._model.eval()
+
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._model.to(self._device)
+
+        self._generation_kwargs = self._resolve_generation_kwargs(raw_params)
 
     def _resolve_generation_kwargs(self, user_params: dict[str, Any]) -> dict[str, Any]:
         resolved: dict[str, Any] = dict(user_params)
@@ -116,31 +137,69 @@ class HuggingFaceChatModel:
         output = HuggingFaceModelOutput(content=text, full_response=raw)
         return HuggingFaceModelResponse(output=output, history=history, cache_hit=False)
 
+    def _prepare_prompt(self, prompt: str, history: list | None, messages: list[dict[str, str]]) -> str:
+        if self.task == "chat-completion" and hasattr(self._tokenizer, "apply_chat_template"):
+            return self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        return self._build_prompt(prompt, history)
+
+    def _tokenize_prompt(self, prompt_text: str) -> dict[str, torch.Tensor]:
+        encoded = self._tokenizer(prompt_text, return_tensors="pt")
+        return {key: value.to(self._device) for key, value in encoded.items()}
+
+    def _generate_text(self, prompt_text: str, **kwargs: Any) -> str:
+        gen_kwargs = {**self._generation_kwargs, **kwargs}
+        return_full_text = bool(gen_kwargs.pop("return_full_text", False))
+        if self._tokenizer.pad_token_id is not None:
+            gen_kwargs.setdefault("pad_token_id", self._tokenizer.pad_token_id)
+        eos_token_id = getattr(self._model.config, "eos_token_id", None)
+        if eos_token_id is not None:
+            gen_kwargs.setdefault("eos_token_id", eos_token_id)
+        inputs = self._tokenize_prompt(prompt_text)
+        with torch.no_grad():
+            output_ids = self._model.generate(**inputs, **gen_kwargs)
+        prompt_length = inputs["input_ids"].shape[-1]
+        generated = output_ids[:, prompt_length:]
+        text = self._tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
+        if return_full_text:
+            return f"{prompt_text}{text}"
+        return text
+
+    def _stream_generate(self, prompt_text: str, **kwargs: Any) -> Generator[str, None, None]:
+        gen_kwargs = {**self._generation_kwargs, **kwargs}
+        return_full_text = bool(gen_kwargs.pop("return_full_text", False))
+        if self._tokenizer.pad_token_id is not None:
+            gen_kwargs.setdefault("pad_token_id", self._tokenizer.pad_token_id)
+        eos_token_id = getattr(self._model.config, "eos_token_id", None)
+        if eos_token_id is not None:
+            gen_kwargs.setdefault("eos_token_id", eos_token_id)
+        streamer = self._streamer_factory(
+            self._tokenizer,
+            skip_prompt=not return_full_text,
+            skip_special_tokens=True,
+        )
+        inputs = self._tokenize_prompt(prompt_text)
+        thread = Thread(
+            target=self._model.generate,
+            kwargs={**inputs, **gen_kwargs, "streamer": streamer},
+            daemon=True,
+        )
+        thread.start()
+        try:
+            for chunk in streamer:
+                yield chunk
+        finally:
+            thread.join()
+
     def chat(self, prompt: str, history: list | None = None, **kwargs: Any) -> HuggingFaceModelResponse:
         messages = self._build_messages(prompt, history)
-        try:
-            if self.task == "chat-completion":
-                response = self._client.chat_completion(
-                    messages=messages,
-                    stream=False,
-                    **{**self._generation_kwargs, **kwargs},
-                )
-                choice = response.choices[0]
-                text = getattr(choice.message, "content", None)
-                if text is None:
-                    text = choice.message.get("content") if isinstance(choice.message, dict) else ""
-                history_out = [*messages, {"role": "assistant", "content": text}]
-                return self._create_response(text or "", response.model_dump() if hasattr(response, "model_dump") else response, history_out)
-            prompt_text = self._build_prompt(prompt, history)
-            text = self._client.text_generation(
-                prompt_text,
-                stream=False,
-                **{**self._generation_kwargs, **kwargs},
-            )
-            history_out = [*messages, {"role": "assistant", "content": text}]
-            return self._create_response(text, text, history_out)
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        prompt_text = self._prepare_prompt(prompt, history, messages)
+        text = self._generate_text(prompt_text, **kwargs)
+        history_out = [*messages, {"role": "assistant", "content": text}]
+        return self._create_response(text, text, history_out)
 
     async def achat(
         self,
@@ -148,31 +207,7 @@ class HuggingFaceChatModel:
         history: list | None = None,
         **kwargs: Any,
     ) -> HuggingFaceModelResponse:
-        messages = self._build_messages(prompt, history)
-        try:
-            if self.task == "chat-completion":
-                response = await self._aclient.chat_completion(
-                    messages=messages,
-                    stream=False,
-                    **{**self._generation_kwargs, **kwargs},
-                )
-                choice = response.choices[0]
-                text = getattr(choice.message, "content", None)
-                if text is None:
-                    text = choice.message.get("content") if isinstance(choice.message, dict) else ""
-                history_out = [*messages, {"role": "assistant", "content": text}]
-                raw = response.model_dump() if hasattr(response, "model_dump") else response
-                return self._create_response(text or "", raw, history_out)
-            prompt_text = self._build_prompt(prompt, history)
-            text = await self._aclient.text_generation(
-                prompt_text,
-                stream=False,
-                **{**self._generation_kwargs, **kwargs},
-            )
-            history_out = [*messages, {"role": "assistant", "content": text}]
-            return self._create_response(text, text, history_out)
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        return await asyncio.to_thread(self.chat, prompt, history, **kwargs)
 
     def chat_stream(
         self,
@@ -181,34 +216,8 @@ class HuggingFaceChatModel:
         **kwargs: Any,
     ) -> Generator[str, None, None]:
         messages = self._build_messages(prompt, history)
-        try:
-            if self.task == "chat-completion":
-                stream = self._client.chat_completion(
-                    messages=messages,
-                    stream=True,
-                    **{**self._generation_kwargs, **kwargs},
-                )
-                for chunk in stream:
-                    if chunk.choices:
-                        delta = chunk.choices[0].delta
-                        text = getattr(delta, "content", None)
-                        if text:
-                            yield text
-                return
-            prompt_text = self._build_prompt(prompt, history)
-            stream = self._client.text_generation(
-                prompt_text,
-                stream=True,
-                **{**self._generation_kwargs, **kwargs},
-            )
-            for event in stream:
-                token = getattr(event, "token", None)
-                if token is not None:
-                    text = getattr(token, "text", None)
-                    if text and not getattr(token, "special", False):
-                        yield text
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        prompt_text = self._prepare_prompt(prompt, history, messages)
+        yield from self._stream_generate(prompt_text, **kwargs)
 
     async def achat_stream(
         self,
@@ -216,32 +225,22 @@ class HuggingFaceChatModel:
         history: list | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
-        messages = self._build_messages(prompt, history)
-        try:
-            if self.task == "chat-completion":
-                stream = self._aclient.chat_completion(
-                    messages=messages,
-                    stream=True,
-                    **{**self._generation_kwargs, **kwargs},
-                )
-                async for chunk in stream:
-                    if chunk.choices:
-                        delta = chunk.choices[0].delta
-                        text = getattr(delta, "content", None)
-                        if text:
-                            yield text
-                return
-            prompt_text = self._build_prompt(prompt, history)
-            stream = self._aclient.text_generation(
-                prompt_text,
-                stream=True,
-                **{**self._generation_kwargs, **kwargs},
-            )
-            async for event in stream:
-                token = getattr(event, "token", None)
-                if token is not None:
-                    text = getattr(token, "text", None)
-                    if text and not getattr(token, "special", False):
-                        yield text
-        except self._timeout_error as exc:  # pragma: no cover - passthrough
-            raise TimeoutError(str(exc)) from exc
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        sentinel = object()
+        loop = asyncio.get_running_loop()
+
+        def enqueue_stream() -> None:
+            try:
+                for chunk in self.chat_stream(prompt, history, **kwargs):
+                    asyncio.run_coroutine_threadsafe(queue.put(str(chunk)), loop)
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(sentinel), loop)
+
+        Thread(target=enqueue_stream, daemon=True).start()
+
+        while True:
+            item = await queue.get()
+            if item is sentinel:
+                break
+            if item is not None:
+                yield item
