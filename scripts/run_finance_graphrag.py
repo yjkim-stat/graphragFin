@@ -84,6 +84,19 @@ def _guess_title_column(example: dict[str, Any], text_column: str) -> Optional[s
     return None
 
 
+def _normalise_creation_date(value: Any) -> str:
+    """Convert a raw creation date value into an ISO-8601 string."""
+
+    if isinstance(value, str):
+        value = value.strip() or None
+
+    timestamp = pd.to_datetime(value, utc=True, errors="coerce")
+    if timestamp is not None and not pd.isna(timestamp):
+        return timestamp.isoformat()
+
+    return pd.Timestamp.now(tz="UTC").isoformat()
+
+
 def _load_finance_documents(
     dataset_name: str,
     split: str,
@@ -132,6 +145,7 @@ def _load_finance_documents(
                 "title": title,
                 "text": text,
                 "metadata": metadata,
+                "creation_date": _normalise_creation_date(None),
             }
         )
 
@@ -152,7 +166,6 @@ def _load_finance_documents(
         dataset_summary["metadata_columns"] = metadata_columns
 
     return documents, dataset_summary
-
 
 def _build_config(args: argparse.Namespace, root_dir: Path, token: str) -> GraphRagConfig:
     """Create a GraphRAG configuration for Hugging Face providers."""
@@ -282,6 +295,22 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     output_dir = Path(config.output.base_dir)
+
+    workflow_errors = {
+        result.workflow: [str(error) for error in result.errors or []]
+        for result in pipeline_results
+        if result.errors
+    }
+    if workflow_errors:
+        formatted_errors = ", ".join(
+            f"{workflow}: {errors}" for workflow, errors in workflow_errors.items()
+        )
+        raise RuntimeError(
+            "One or more GraphRAG workflows failed. "
+            "Review the logs for details and address the underlying errors before rerunning "
+            f"the pipeline. Reported failures: {formatted_errors}"
+        )
+
     artifacts = {
         "documents": _load_parquet(output_dir, "documents.parquet"),
         "entities": _load_parquet(output_dir, "entities.parquet"),

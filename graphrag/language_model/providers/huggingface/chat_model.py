@@ -1,6 +1,6 @@
 """Chat model implementation for Hugging Face Inference endpoints."""
-
 from __future__ import annotations
+import os
 
 from collections.abc import AsyncGenerator, Generator
 from typing import TYPE_CHECKING, Any
@@ -40,8 +40,7 @@ class HuggingFaceChatModel:
         generation_kwargs: dict[str, Any] | None = None,
     ) -> None:
         try:
-            from huggingface_hub import AsyncInferenceClient, InferenceClient
-            from huggingface_hub.utils import InferenceTimeoutError
+            from huggingface_hub import AsyncInferenceClient, InferenceClient, InferenceTimeoutError
         except ImportError as exc:  # pragma: no cover - import guard
             msg = (
                 "huggingface-hub is required to use the Hugging Face model providers. "

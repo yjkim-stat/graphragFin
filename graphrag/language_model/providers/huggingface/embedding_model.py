@@ -1,6 +1,6 @@
 """Embedding model implementation for Hugging Face Inference endpoints."""
-
 from __future__ import annotations
+import os
 
 from typing import TYPE_CHECKING, Any
 
@@ -40,7 +40,7 @@ class HuggingFaceEmbeddingModel:
         timeout = config.request_timeout or None
         base_url = config.api_base or None
 
-        client_kwargs: dict[str, Any] = {"token": config.api_key, "timeout": timeout}
+        client_kwargs: dict[str, Any] = {"token": config.api_key, "timeout": timeout, "cache_dir":os.getenv('CACHE_DIR')}
         if base_url:
             client_kwargs["base_url"] = base_url.rstrip("/")
 

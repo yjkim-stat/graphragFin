@@ -16,7 +16,7 @@ class MemoryPipelineStorage(FilePipelineStorage):
 
     _storage: dict[str, Any]
 
-    def __init__(self):
+    def __init__(self, **kwargs: Any):
         """Init method definition."""
         super().__init__()
         self._storage = {}
