@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -37,6 +38,10 @@ from graphrag.query.indexer_adapters import (
 from graphrag.utils.api import get_embedding_store, reformat_context_data
 
 
+LOGGER_NAME = "finance_graphrag"
+logger = logging.getLogger(LOGGER_NAME)
+
+
 def _json_default(value: Any) -> Any:
     """Convert unsupported JSON types to serialisable forms."""
 
@@ -51,6 +56,44 @@ def _json_default(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         return value.model_dump()
     return str(value)
+
+
+def _setup_logger(log_dir: Path, level: int = logging.INFO) -> logging.Logger:
+    """Configure a module-level logger with a file handler."""
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "run_finance_graphrag.log"
+
+    logger.setLevel(level)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+    )
+
+    has_file_handler = any(
+        isinstance(handler, logging.FileHandler)
+        and getattr(handler, "baseFilename", None) == str(log_file)
+        for handler in logger.handlers
+    )
+    if not has_file_handler:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    has_stream_handler = any(
+        isinstance(handler, logging.StreamHandler)
+        and not isinstance(handler, logging.FileHandler)
+        for handler in logger.handlers
+    )
+    if not has_stream_handler:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(level)
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
+
+    logger.propagate = False
+    return logger
 
 
 def _ensure_workspace(root_dir: Path) -> None:
@@ -101,6 +144,7 @@ def _load_finance_documents(
     dataset_name: str,
     split: str,
     max_documents: Optional[int],
+    debug_document_limit: Optional[int],
     text_column: Optional[str],
     title_column: Optional[str],
     metadata_columns: Optional[list[str]],
@@ -120,8 +164,18 @@ def _load_finance_documents(
     rows: list[dict[str, Any]] = []
     text_lengths: list[int] = []
 
-    limit = max_documents if max_documents is not None else len(dataset)
-    limit = min(limit, len(dataset))
+    limit = len(dataset)
+    if max_documents is not None:
+        limit = min(limit, max_documents)
+    if debug_document_limit is not None:
+        if debug_document_limit <= 0:
+            raise ValueError("debug_document_limit must be a positive integer")
+        limit = min(limit, debug_document_limit)
+        logger.info(
+            "Debug document limit applied: using %s documents (requested limit: %s)",
+            limit,
+            debug_document_limit,
+        )
     for idx in range(limit):
         example = dataset[idx]
         text = str(example[resolved_text_column])
@@ -164,6 +218,8 @@ def _load_finance_documents(
     }
     if metadata_columns:
         dataset_summary["metadata_columns"] = metadata_columns
+    if debug_document_limit is not None:
+        dataset_summary["debug_document_limit"] = debug_document_limit
 
     return documents, dataset_summary
 
@@ -269,6 +325,10 @@ def _compute_cost(
 async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     root_dir = args.workspace_dir.resolve()
     _ensure_workspace(root_dir)
+    run_logger = _setup_logger(root_dir / "logs")
+    run_logger.info(
+        "Starting finance GraphRAG pipeline", extra={"dataset": args.dataset_name}
+    )
 
     token = args.huggingface_token or os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not token:
@@ -282,9 +342,18 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         dataset_name=args.dataset_name,
         split=args.split,
         max_documents=args.max_documents,
+        debug_document_limit=args.debug_document_limit,
         text_column=args.text_column,
         title_column=args.title_column,
         metadata_columns=args.metadata_columns,
+    )
+    run_logger.info(
+        "Loaded dataset '%s' split '%s' with %s documents (max=%s, debug_limit=%s)",
+        args.dataset_name,
+        args.split,
+        len(documents),
+        args.max_documents,
+        args.debug_document_limit,
     )
 
     indexing_method = IndexingMethod(args.indexing_method)
@@ -454,6 +523,7 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         },
     }
 
+    run_logger.info("GraphRAG pipeline completed successfully")
     return report
 
 
@@ -480,6 +550,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=int,
         default=200,
         help="Maximum number of documents to index from the dataset.",
+    )
+    parser.add_argument(
+        "--debug-document-limit",
+        type=int,
+        default=None,
+        help="Optional limit to reduce the dataset size when debugging.",
     )
     parser.add_argument(
         "--text-column",
@@ -596,6 +672,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         json.dumps(report, ensure_ascii=False, indent=2, default=_json_default),
         encoding="utf-8",
     )
+    logger.info("Saved report to %s", args.output_file)
     print(f"Saved report to {args.output_file}")
 
 
