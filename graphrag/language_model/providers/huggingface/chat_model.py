@@ -151,7 +151,12 @@ class HuggingFaceChatModel:
         return "\n".join(turns)
 
     def _create_response(self, text: str, raw: Any, history: list) -> HuggingFaceModelResponse:
-        output = HuggingFaceModelOutput(content=text, full_response=raw)
+        if isinstance(raw, dict) or raw is None:
+            full_response = raw
+        else:
+            full_response = {"text": str(raw)}
+
+        output = HuggingFaceModelOutput(content=text, full_response=full_response)
         return HuggingFaceModelResponse(output=output, history=history, cache_hit=False)
 
     def _prepare_prompt(self, prompt: str, history: list | None, messages: list[dict[str, str]]) -> str:

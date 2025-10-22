@@ -329,6 +329,7 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     run_logger.info(
         "Starting finance GraphRAG pipeline", extra={"dataset": args.dataset_name}
     )
+    run_logger.info(f'Logging at {root_dir / "logs"}')
 
     token = args.huggingface_token or os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not token:
@@ -337,6 +338,7 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     config = _build_config(args, root_dir, token)
+    logger.info(f'config:\n{config}')
 
     documents, dataset_summary = _load_finance_documents(
         dataset_name=args.dataset_name,
@@ -355,14 +357,16 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         args.max_documents,
         args.debug_document_limit,
     )
+    run_logger.info(f'documents.index\n{documents.index}')
 
     indexing_method = IndexingMethod(args.indexing_method)
+    run_logger.info(f'indexing_method\n{indexing_method}')
     pipeline_results = await build_index(
         config=config,
         method=indexing_method,
         input_documents=documents,
     )
-
+    run_logger.info(f'pipeline_results\n{pipeline_results}')
     output_dir = Path(config.output.base_dir)
 
     workflow_errors = {
