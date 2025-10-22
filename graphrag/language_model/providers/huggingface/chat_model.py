@@ -50,6 +50,7 @@ class HuggingFaceChatModel:
                 AutoModelForCausalLM,
                 AutoTokenizer,
                 TextIteratorStreamer,
+                BitsAndBytesConfig
             )
         except ImportError as exc:  # pragma: no cover - import guard
             msg = (
@@ -81,7 +82,23 @@ class HuggingFaceChatModel:
         if self._tokenizer.pad_token is None and self._tokenizer.eos_token is not None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
 
-        self._model = AutoModelForCausalLM.from_pretrained(model, **model_kwargs)
+        quantization_config = {
+            'load_in_4bit': True,
+            'load_in_8bit': False,
+            'bnb_4bit_use_double_quant': True,
+            'bnb_4bit_compute_dtype': 'float16',
+            'bnb_4bit_quant_type': 'nf4',
+        }
+        self._model = AutoModelForCausalLM.from_pretrained(
+            model, 
+            dtype=torch.float16, 
+            trust_remote_code=True, 
+            quantization_config=BitsAndBytesConfig(**quantization_config), 
+            # cache_dir=os.getenv('CACHE_DIR'),
+            attn_implementation=os.getenv('ATTN_IMPLEMENTATION', "flash_attention_2"),
+            token=os.getenv('HF_TOKEN'),
+            **model_kwargs
+            )
         self._model.eval()
 
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

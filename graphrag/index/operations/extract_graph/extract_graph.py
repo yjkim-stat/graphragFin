@@ -68,14 +68,14 @@ async def extract_graph(
         num_threads=num_threads,
         progress_msg="extract graph progress: ",
     )
-
+    logger.info(f'results[-1]:{results[-1]}')
     entity_dfs = []
     relationship_dfs = []
     for result in results:
         if result:
             entity_dfs.append(pd.DataFrame(result[0]))
             relationship_dfs.append(pd.DataFrame(result[1]))
-
+    logger.info(f'entity_dfs[-1]:{entity_dfs[-1]}')
     entities = _merge_entities(entity_dfs)
     relationships = _merge_relationships(relationship_dfs)
 
