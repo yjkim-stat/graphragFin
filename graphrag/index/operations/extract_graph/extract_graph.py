@@ -69,12 +69,19 @@ async def extract_graph(
         progress_msg="extract graph progress: ",
     )
 
-    entity_dfs = []
-    relationship_dfs = []
+    entity_dfs: list[pd.DataFrame] = []
+    relationship_dfs: list[pd.DataFrame] = []
     for result in results:
-        if result:
-            entity_dfs.append(pd.DataFrame(result[0]))
-            relationship_dfs.append(pd.DataFrame(result[1]))
+        if not result:
+            continue
+
+        entity_df = pd.DataFrame(result[0])
+        if not entity_df.empty:
+            entity_dfs.append(entity_df)
+
+        relationship_df = pd.DataFrame(result[1])
+        if not relationship_df.empty:
+            relationship_dfs.append(relationship_df)
 
     entities = _merge_entities(entity_dfs)
     relationships = _merge_relationships(relationship_dfs)
@@ -98,7 +105,29 @@ def _load_strategy(strategy_type: ExtractEntityStrategyType) -> EntityExtractStr
 
 
 def _merge_entities(entity_dfs) -> pd.DataFrame:
-    all_entities = pd.concat(entity_dfs, ignore_index=True)
+    required_columns = {"title", "type", "description", "source_id"}
+
+    valid_dfs = []
+    for df in entity_dfs or []:
+        if df is None or df.empty:
+            continue
+
+        missing_columns = required_columns - set(df.columns)
+        if missing_columns:
+            logger.warning(
+                "Skipping entity DataFrame missing required columns: %s",
+                ", ".join(sorted(missing_columns)),
+            )
+            continue
+
+        valid_dfs.append(df)
+
+    if not valid_dfs:
+        return pd.DataFrame(
+            columns=["title", "type", "description", "text_unit_ids", "frequency"]
+        )
+
+    all_entities = pd.concat(valid_dfs, ignore_index=True)
     return (
         all_entities.groupby(["title", "type"], sort=False)
         .agg(
@@ -111,7 +140,29 @@ def _merge_entities(entity_dfs) -> pd.DataFrame:
 
 
 def _merge_relationships(relationship_dfs) -> pd.DataFrame:
-    all_relationships = pd.concat(relationship_dfs, ignore_index=False)
+    required_columns = {"source", "target", "description", "source_id", "weight"}
+
+    valid_dfs = []
+    for df in relationship_dfs or []:
+        if df is None or df.empty:
+            continue
+
+        missing_columns = required_columns - set(df.columns)
+        if missing_columns:
+            logger.warning(
+                "Skipping relationship DataFrame missing required columns: %s",
+                ", ".join(sorted(missing_columns)),
+            )
+            continue
+
+        valid_dfs.append(df)
+
+    if not valid_dfs:
+        return pd.DataFrame(
+            columns=["source", "target", "description", "text_unit_ids", "weight"]
+        )
+
+    all_relationships = pd.concat(valid_dfs, ignore_index=False)
     return (
         all_relationships.groupby(["source", "target"], sort=False)
         .agg(
