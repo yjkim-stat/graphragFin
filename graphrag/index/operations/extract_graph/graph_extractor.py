@@ -150,7 +150,7 @@ class GraphExtractor:
             }),
         )
         results = response.output.content or ""
-
+        logger.info(f'results\n{results}')
         # if gleanings are specified, enter a loop to extract more entities
         # there are two exit criteria: (a) we hit the configured max, (b) the model says there are no more entities
         if self._max_gleanings > 0:

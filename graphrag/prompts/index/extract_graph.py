@@ -2,7 +2,7 @@
 # Licensed under the MIT License
 
 """A file containing prompts definition."""
-
+# NOTE : 이게 한국어 데이터에 사용할 것으로 적절하지 않을 수 있다.
 GRAPH_EXTRACTION_PROMPT = """
 -Goal-
 Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.

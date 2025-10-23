@@ -88,7 +88,7 @@ class CommunityReportsExtractor:
         except Exception as e:
             logger.exception("error generating community report")
             self._on_error(e, traceback.format_exc(), None)
-
+        logger.info(f'output:{output}')
         text_output = self._get_text_output(output) if output else ""
         return CommunityReportsResult(
             structured_output=output,

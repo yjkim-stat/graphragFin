@@ -24,6 +24,9 @@ if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from graphrag.cache.pipeline_cache import PipelineCache
     from graphrag.config.models.language_model_config import LanguageModelConfig
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class HuggingFaceModelOutput(BaseModelOutput):
     """Model output wrapper for Hugging Face responses."""
@@ -44,6 +47,7 @@ class HuggingFaceChatModel:
         *,
         task: str | None = None,
         generation_kwargs: dict[str, Any] | None = None,
+        **kwargs,
     ) -> None:
         try:
             from transformers import (  # pylint: disable=import-outside-toplevel
@@ -182,6 +186,10 @@ class HuggingFaceChatModel:
             gen_kwargs.setdefault("eos_token_id", eos_token_id)
         inputs = self._tokenize_prompt(prompt_text)
         with torch.no_grad():
+            for _k in ['name', 'json', 'json_model']:
+                if gen_kwargs.pop(_k, False):
+                    # NOTE ('name') HF generation에 필요없고 OpenAI에서만 지원하는 구조임.
+                    logger.info(f'{_k} removed from gen_kwargs')
             output_ids = self._model.generate(**inputs, **gen_kwargs)
         prompt_length = inputs["input_ids"].shape[-1]
         generated = output_ids[:, prompt_length:]
@@ -239,6 +247,14 @@ class HuggingFaceChatModel:
     ) -> Generator[str, None, None]:
         messages = self._build_messages(prompt, history)
         prompt_text = self._prepare_prompt(prompt, history, messages)
+
+        logger.info(f'messages\n\t{messages}')
+        logger.info(f'prompt_text\n\t{prompt_text}')
+        for _k in ['model_parameters']:
+            if kwargs.pop(_k, False):
+                # NOTE ('name') HF generation에 필요없고 OpenAI에서만 지원하는 구조임.
+                logger.info(f'{_k} removed from kwargs')
+
         yield from self._stream_generate(prompt_text, **kwargs)
 
     async def achat_stream(

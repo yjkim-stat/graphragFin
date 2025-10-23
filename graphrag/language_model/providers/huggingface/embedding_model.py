@@ -17,6 +17,11 @@ if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from graphrag.config.models.language_model_config import LanguageModelConfig
 
 
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+
 class HuggingFaceEmbeddingModel:
     """Hugging Face-based embedding model."""
 
@@ -27,6 +32,7 @@ class HuggingFaceEmbeddingModel:
         cache: "PipelineCache | None" = None,
         *,
         feature_kwargs: dict[str, Any] | None = None,
+        **kwargs,
     ) -> None:
         try:
             from transformers import pipeline  # pylint: disable=import-outside-toplevel
@@ -71,21 +77,54 @@ class HuggingFaceEmbeddingModel:
         self._feature_kwargs = raw_params
 
     def _normalize_embedding(self, data: Any) -> list[float]:
+        logger.info(f'data type: {type(data)}')
+
         if data is None:
             return []
-        if isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)):
-            # take first element for sequence outputs (e.g., sentence transformers)
-            vector = data[0]
-        else:
-            vector = data
-        if isinstance(vector, (list, tuple)):
-            return [float(x) for x in vector]
-        return [float(vector)]
 
+        # torch.Tensor -> numpy
+        if isinstance(data, torch.Tensor):
+            arr = data.detach().cpu().float().numpy()
+        else:
+            # list/tuple/np.ndarray 전부 허용
+            arr = np.array(data, dtype=float, copy=False)
+
+        # 3D: (batch, tokens, dim)  -> 토큰 평균
+        if arr.ndim == 3:
+            # 일반적으로 feature-extraction이 여기 해당
+            arr = arr.mean(axis=1)            # (batch, dim)
+            arr = arr[0]                      # (dim,)
+
+        # 2D: (batch, dim) 또는 (tokens, dim)
+        elif arr.ndim == 2:
+            b, d = arr.shape
+            # 휴리스틱:
+            # - 보통 dim은 64, 128, 384, 768 등 큰 값
+            # - 배치가 1이면 확실히 (batch, dim)
+            if b == 1:
+                arr = arr[0]                  # (dim,)
+            else:
+                # b>1 이면 대부분 (batch, dim) 이므로 첫 배치 선택
+                # 다만 (tokens, dim)일 가능성도 있으므로
+                # tokens 평균을 원한다면 아래 한 줄로 교체:
+                # arr = arr.mean(axis=0)
+                arr = arr[0]
+
+        # 1D: (dim,)
+        elif arr.ndim == 1:
+            pass
+
+        else:
+            raise ValueError(f"Unexpected embedding shape: {arr.shape}")
+
+        return arr.tolist()
     def embed(self, text: str, **kwargs: Any) -> list[float]:
+        logger.info(f'text:{text}')
+        logger.info(f'kwargs:{kwargs}')
         embedding = self._pipeline(
             text,
             **{**self._feature_kwargs, **kwargs},
+            truncation=True # 
         )
         return self._normalize_embedding(embedding)
 

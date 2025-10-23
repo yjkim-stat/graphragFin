@@ -78,12 +78,12 @@ def to_optional_list(
     if isinstance(value, str):
         value = [value]
     if not isinstance(value, list):
-        msg = f"value is not a list: {value} ({type(value)})"
+        msg = f"value of {column_name} is not a list: {value} ({type(value)})"
         raise TypeError(msg)
     if item_type is not None:
         for v in value:
             if not isinstance(v, item_type):
-                msg = f"list item is not [{item_type}]: {v} ({type(v)})"
+                msg = f"list item in {column_name} is not [{item_type}]: {v} ({type(v)})"
                 raise TypeError(msg)
     return value
 

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from pprint import pformat
 from typing import Any, Iterable, Optional
 
 import numpy as np
@@ -25,8 +26,13 @@ from datasets import load_dataset
 from graphrag.api.index import build_index
 from graphrag.config.create_graphrag_config import create_graphrag_config
 from graphrag.config.embeddings import entity_description_embedding
+from graphrag.config.embeddings import (
+    entity_description_embedding,
+    default_embeddings,
+)
 from graphrag.config.enums import IndexingMethod
 from graphrag.config.models.graph_rag_config import GraphRagConfig
+from graphrag.index.workflows.factory import PipelineFactory
 from graphrag.query.factory import get_local_search_engine
 from graphrag.query.indexer_adapters import (
     read_indexer_covariates,
@@ -223,6 +229,41 @@ def _load_finance_documents(
 
     return documents, dataset_summary
 
+
+def _resolve_workflow_overrides(
+    indexing_method: str,
+    skip_community_reports: bool,
+) -> list[str] | None:
+    """Return a workflow list with community report stages removed when requested."""
+
+    if not skip_community_reports:
+        return None
+
+    try:
+        method_enum = IndexingMethod(indexing_method)
+    except ValueError:
+        return None
+
+    base_workflows = (
+        PipelineFactory.pipelines.get(method_enum)
+        or PipelineFactory.pipelines.get(method_enum.value)
+        or []
+    )
+    if not base_workflows:
+        return None
+
+    skip_steps = {
+        "create_community_reports",
+        "create_community_reports_text",
+        "update_community_reports",
+    }
+    filtered = [step for step in base_workflows if step not in skip_steps]
+
+    if len(filtered) == len(base_workflows):
+        return None
+
+    return filtered
+
 def _build_config(args: argparse.Namespace, root_dir: Path, token: str) -> GraphRagConfig:
     """Create a GraphRAG configuration for Hugging Face providers."""
 
@@ -270,6 +311,21 @@ def _build_config(args: argparse.Namespace, root_dir: Path, token: str) -> Graph
             }
         },
     }
+
+    workflow_override = _resolve_workflow_overrides(
+        args.indexing_method, args.skip_community_reports
+    )
+    if workflow_override is not None:
+        config_dict["workflows"] = list(workflow_override)
+
+    if args.skip_community_reports:
+        community_free_embeddings = [
+            name for name in default_embeddings if not name.startswith("community.")
+        ]
+        config_dict["embed_text"] = {
+            "names": community_free_embeddings,
+        }
+
     return create_graphrag_config(config_dict, root_dir=str(root_dir))
 
 
@@ -331,6 +387,11 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     )
     run_logger.info(f'Logging at {root_dir / "logs"}')
 
+    if args.skip_community_reports:
+        run_logger.info(
+            "Community report workflows disabled; skipping community summarization stage."
+        )
+
     token = args.huggingface_token or os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not token:
         raise ValueError(
@@ -384,16 +445,25 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
             f"the pipeline. Reported failures: {formatted_errors}"
         )
 
+    community_reports_df = None
+    if not args.skip_community_reports:
+        community_reports_df = _load_parquet(
+            output_dir, "community_reports.parquet"
+        )
+
     artifacts = {
         "documents": _load_parquet(output_dir, "documents.parquet"),
         "entities": _load_parquet(output_dir, "entities.parquet"),
         "relationships": _load_parquet(output_dir, "relationships.parquet"),
         "communities": _load_parquet(output_dir, "communities.parquet"),
-        "community_reports": _load_parquet(output_dir, "community_reports.parquet"),
+        # "community_reports": _load_parquet(output_dir, "community_reports.parquet"),
+       "community_reports": community_reports_df,
         "text_units": _load_parquet(output_dir, "text_units.parquet"),
         "covariates": _load_parquet(output_dir, "covariates.parquet"),
     }
-
+    # NOTE : text_units의 document_ids가 string이어야 하는데 코드 상에서는 int로 처리중
+    # 일단 manual하게 처리
+    artifacts["text_units"]['document_ids'] = artifacts["text_units"]['document_ids'].astype(str)
     required_artifacts = [
         "documents",
         "entities",
@@ -402,6 +472,11 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "community_reports",
         "text_units",
     ]
+    if args.skip_community_reports:
+        required_artifacts.pop(required_artifacts.index("community_reports"))
+    required_artifacts.append("text_units")
+    run_logger.info(f'required_artifacts:\n\t{required_artifacts}')
+    
     missing_required = [
         name for name in required_artifacts if artifacts.get(name) is None
     ]
@@ -437,14 +512,29 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         if artifacts["covariates"] is not None
         else {}
     )
-    search_engine = get_local_search_engine(
-        config=config,
-        reports=read_indexer_reports(
+    # search_engine = get_local_search_engine(
+    #     config=config,
+    #     reports=read_indexer_reports(
+    if args.skip_community_reports or artifacts["community_reports"] is None:
+        reports = []
+    else:
+        reports = read_indexer_reports(    
             artifacts["community_reports"],
             artifacts["communities"],
             args.community_level,
             config=config,
-        ),
+        )
+    
+    run_logger.info(f'artifacts["community_reports"]:\n\t{artifacts["community_reports"]}')
+    run_logger.info(f'artifacts["entities"]:\n\t{artifacts["entities"]}')
+    run_logger.info(f'artifacts["relationships"]:\n\t{artifacts["relationships"]}')
+    run_logger.info(f'artifacts["communities"]:\n\t{artifacts["communities"]}')
+    run_logger.info(f'artifacts["text_units"]:\n\t{artifacts["text_units"]}')
+    run_logger.info(f'artifacts["text_units"]:\n\t{pformat(artifacts["text_units"].iloc[0].to_dict())}')
+    
+    search_engine = get_local_search_engine(
+        config=config,
+        reports=reports,
         text_units=read_indexer_text_units(artifacts["text_units"]),
         entities=entities,
         relationships=read_indexer_relationships(artifacts["relationships"]),
@@ -543,6 +633,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         "--dataset-name",
         default="AnonymousLLMer/finance-corpus-krx",
         help="Hugging Face dataset identifier to load.",
+    )
+    parser.add_argument(
+        "--skip-community-reports",
+        action="store_true",
+        help="Disable community report workflows and omit community report artifacts.",
     )
     parser.add_argument(
         "--split",
@@ -680,5 +775,19 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     print(f"Saved report to {args.output_file}")
 
 
+def set_seed(seed):
+    import random
+    import torch 
+    import torch.backends.cudnn as cudnn
+    
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    cudnn.benchmark = False
+    cudnn.deterministic = True
+    random.seed(seed)
+
 if __name__ == "__main__":
+    set_seed(123)
     main()

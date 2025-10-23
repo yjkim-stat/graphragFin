@@ -23,6 +23,10 @@ from graphrag.language_model.providers.litellm.embedding_model import (
     LitellmEmbeddingModel,
 )
 
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 class ModelFactory:
     """A factory for creating Model instances."""
@@ -58,6 +62,10 @@ class ModelFactory:
         if model_type not in cls._chat_registry:
             msg = f"ChatMOdel implementation '{model_type}' is not registered."
             raise ValueError(msg)
+        logger.info(f'kwargs:{kwargs}')   
+        if kwargs.get('callbacks', False):
+            # HuggingFaceChatModel는 이걸 지원하면 안됨
+            logger.info(f'callbacks removed')            
         return cls._chat_registry[model_type](**kwargs)
 
     @classmethod

@@ -59,7 +59,7 @@ async def extract_graph(
         )
         num_started += 1
         return [result.entities, result.relationships, result.graph]
-
+    logger.info(f'text_units:\n\t{text_units.iloc[0].to_dict()}')
     results = await derive_from_rows(
         text_units,
         run_strategy,
@@ -68,7 +68,7 @@ async def extract_graph(
         num_threads=num_threads,
         progress_msg="extract graph progress: ",
     )
-
+    logger.info(f'results\n\t{results}')
     entity_dfs: list[pd.DataFrame] = []
     relationship_dfs: list[pd.DataFrame] = []
     for result in results:
