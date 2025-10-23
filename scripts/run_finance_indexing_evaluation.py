@@ -121,6 +121,118 @@ def _guess_title_column(example: dict[str, Any], text_column: str) -> Optional[s
     return None
 
 
+def _is_docred_like_example(example: dict[str, Any]) -> bool:
+    """Heuristically detect DocRED-style token/vertex structured examples."""
+
+    sentences = example.get("sents")
+    vertex_set = example.get("vertexSet")
+    if not isinstance(sentences, list) or not isinstance(vertex_set, list):
+        return False
+
+    has_tokenised_sentence = any(
+        isinstance(sentence, (list, tuple)) for sentence in sentences
+    )
+    has_entity_clusters = any(
+        isinstance(cluster, (list, tuple)) for cluster in vertex_set
+    )
+    return has_tokenised_sentence and has_entity_clusters
+
+
+def _docred_sentences_to_text(sentences: Any) -> str:
+    """Join tokenised sentences into a newline-separated document string."""
+
+    if not isinstance(sentences, list):
+        return ""
+
+    flattened: list[str] = []
+    for sentence in sentences:
+        if isinstance(sentence, (list, tuple)):
+            tokens = [str(token) for token in sentence if token is not None]
+            joined = " ".join(tokens).strip()
+        else:
+            joined = str(sentence).strip()
+        if joined:
+            flattened.append(joined)
+    return "\n".join(flattened)
+
+
+def _extract_docred_entities(vertex_set: Any) -> list[str]:
+    """Collapse DocRED-style entity clusters into canonical surface forms."""
+
+    if not isinstance(vertex_set, list):
+        return []
+
+    entities: list[str] = []
+    seen: set[str] = set()
+    for cluster in vertex_set:
+        if not isinstance(cluster, (list, tuple)):
+            continue
+
+        canonical_name: Optional[str] = None
+        for mention in cluster:
+            if isinstance(mention, dict):
+                name = mention.get("name")
+            else:
+                name = mention
+            if not name:
+                continue
+            candidate = str(name).strip()
+            if candidate:
+                canonical_name = candidate
+                break
+
+        if not canonical_name:
+            continue
+
+        key = canonical_name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        entities.append(canonical_name)
+
+    return entities
+
+
+def _preprocess_docred_like_example(
+    example: dict[str, Any],
+    default_title: str,
+) -> dict[str, Any]:
+    """Normalise DocRED-style examples for the finance indexing workflow."""
+
+    text = _docred_sentences_to_text(example.get("sents"))
+    raw_title = example.get("title")
+    title = (
+        str(raw_title).strip()
+        if isinstance(raw_title, str) and str(raw_title).strip()
+        else default_title
+    )
+
+    entities = _extract_docred_entities(example.get("vertexSet"))
+
+    metadata: dict[str, Any] = {}
+    if "labels" in example:
+        metadata["labels"] = example["labels"]
+
+    sentences = example.get("sents")
+    if isinstance(sentences, list):
+        metadata["sentence_count"] = sum(
+            1 for sentence in sentences if isinstance(sentence, (list, tuple, str))
+        )
+
+    vertex_set = example.get("vertexSet")
+    if isinstance(vertex_set, list):
+        metadata["entity_cluster_count"] = sum(
+            1 for cluster in vertex_set if isinstance(cluster, (list, tuple))
+        )
+
+    return {
+        "title": title,
+        "text": text,
+        "entities": entities,
+        "metadata": metadata or None,
+    }
+
+
 def _normalise_creation_date(value: Any) -> str:
     """Convert a raw creation date value into an ISO-8601 string."""
 
@@ -151,10 +263,21 @@ def _load_finance_documents(
         raise ValueError("Loaded dataset is empty.")
 
     first_example = dataset[0]
-    resolved_text_column = text_column or _guess_text_column(first_example)
-    resolved_title_column = title_column or _guess_title_column(
-        first_example, resolved_text_column
-    )
+    docred_like = _is_docred_like_example(first_example)
+
+    if docred_like:
+        resolved_text_column = text_column or "sents"
+        resolved_title_column = title_column or (
+            "title"
+            if isinstance(first_example.get("title"), str)
+            and str(first_example.get("title")).strip()
+            else None
+        )
+    else:
+        resolved_text_column = text_column or _guess_text_column(first_example)
+        resolved_title_column = title_column or _guess_title_column(
+            first_example, resolved_text_column
+        )
 
     rows: list[dict[str, Any]] = []
     text_lengths: list[int] = []
@@ -176,20 +299,35 @@ def _load_finance_documents(
         )
     for idx in range(limit):
         example = dataset[idx]
-        text = str(example[resolved_text_column])
-        title = (
-            str(example[resolved_title_column])
-            if resolved_title_column is not None
-            else f"Document {idx}"
-        )
-        text_lengths.append(len(text))
 
-        metadata: dict[str, Any] | None = None
-        selected_metadata = metadata_columns or []
-        if selected_metadata:
-            metadata = {
-                key: example.get(key) for key in selected_metadata if key in example
+        metadata_values: dict[str, Any] = {}
+
+        if docred_like:
+            processed = _preprocess_docred_like_example(example, f"Document {idx}")
+            text = processed["text"] or ""
+            title = processed["title"]
+            if processed["metadata"]:
+                metadata_values.update(processed["metadata"])
+            parsed_entities = {
+                entity for entity in processed.get("entities", []) if entity
             }
+        else:
+            text = str(example[resolved_text_column])
+            title = (
+                str(example[resolved_title_column])
+                if resolved_title_column is not None
+                else f"Document {idx}"
+            )
+            parsed_entities = set()
+
+        if metadata_columns:
+            for key in metadata_columns:
+                if key in example:
+                    metadata_values[key] = example.get(key)
+
+        metadata = metadata_values or None
+
+        text_lengths.append(len(text))
 
         document_id = example.get("id", idx)
         rows.append(
@@ -202,17 +340,24 @@ def _load_finance_documents(
             }
         )
 
-        if entity_column:
-            raw_entities = example.get(entity_column)
-            parsed_entities = {
-                value
-                for value in _stringify_collection(raw_entities)
-                if value is not None
-            }
+        if docred_like:
             if parsed_entities:
                 documents_with_ground_truth_entities += 1
             ground_truth_counts.append(len(parsed_entities))
             ground_truth_entities[_stringify_identifier(document_id) or str(idx)] = parsed_entities
+        elif entity_column:
+            raw_entities = example.get(entity_column)
+            parsed_from_column = {
+                value
+                for value in _stringify_collection(raw_entities)
+                if value is not None
+            }
+            if parsed_from_column:
+                documents_with_ground_truth_entities += 1
+            ground_truth_counts.append(len(parsed_from_column))
+            ground_truth_entities[
+                _stringify_identifier(document_id) or str(idx)
+            ] = parsed_from_column
 
     documents = pd.DataFrame(rows)
     dataset_summary = {
@@ -227,14 +372,15 @@ def _load_finance_documents(
             "mean": float(sum(text_lengths) / len(text_lengths)),
         },
     }
+    if docred_like:
+        dataset_summary["docred_like_format"] = True
     if metadata_columns:
         dataset_summary["metadata_columns"] = metadata_columns
     if debug_document_limit is not None:
         dataset_summary["debug_document_limit"] = debug_document_limit
-    if entity_column:
+    if ground_truth_counts:
         total_documents = len(ground_truth_counts) or 1
-        dataset_summary["ground_truth_entities"] = {
-            "column": entity_column,
+        ground_truth_summary: dict[str, Any] = {
             "documents_with_annotations": int(documents_with_ground_truth_entities),
             "average_entities_per_document": (
                 float(sum(ground_truth_counts) / total_documents)
@@ -249,6 +395,11 @@ def _load_finance_documents(
                 })
             ),
         }
+        if docred_like and not entity_column:
+            ground_truth_summary["source"] = "vertexSet"
+        elif entity_column:
+            ground_truth_summary["column"] = entity_column
+        dataset_summary["ground_truth_entities"] = ground_truth_summary
 
     return documents, dataset_summary, ground_truth_entities
 
