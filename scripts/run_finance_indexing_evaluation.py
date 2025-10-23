@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ast
 import json
 import logging
 import os
 import time
+from collections import defaultdict
 from pathlib import Path
 from pprint import pformat
 from typing import Any, Iterable, Optional
@@ -140,7 +142,8 @@ def _load_finance_documents(
     text_column: Optional[str],
     title_column: Optional[str],
     metadata_columns: Optional[list[str]],
-) -> tuple[pd.DataFrame, dict[str, Any]]:
+    entity_column: Optional[str],
+) -> tuple[pd.DataFrame, dict[str, Any], dict[str, set[str]]]:
     """Load the finance dataset and normalise it into a DataFrame."""
 
     dataset = load_dataset(dataset_name, split=split)
@@ -155,6 +158,9 @@ def _load_finance_documents(
 
     rows: list[dict[str, Any]] = []
     text_lengths: list[int] = []
+    ground_truth_entities: dict[str, set[str]] = {}
+    ground_truth_counts: list[int] = []
+    documents_with_ground_truth_entities = 0
 
     limit = len(dataset)
     if max_documents is not None:
@@ -185,15 +191,28 @@ def _load_finance_documents(
                 key: example.get(key) for key in selected_metadata if key in example
             }
 
+        document_id = example.get("id", idx)
         rows.append(
             {
-                "id": example.get("id", idx),
+                "id": document_id,
                 "title": title,
                 "text": text,
                 "metadata": metadata,
                 "creation_date": _normalise_creation_date(None),
             }
         )
+
+        if entity_column:
+            raw_entities = example.get(entity_column)
+            parsed_entities = {
+                value
+                for value in _stringify_collection(raw_entities)
+                if value is not None
+            }
+            if parsed_entities:
+                documents_with_ground_truth_entities += 1
+            ground_truth_counts.append(len(parsed_entities))
+            ground_truth_entities[_stringify_identifier(document_id) or str(idx)] = parsed_entities
 
     documents = pd.DataFrame(rows)
     dataset_summary = {
@@ -212,8 +231,26 @@ def _load_finance_documents(
         dataset_summary["metadata_columns"] = metadata_columns
     if debug_document_limit is not None:
         dataset_summary["debug_document_limit"] = debug_document_limit
+    if entity_column:
+        total_documents = len(ground_truth_counts) or 1
+        dataset_summary["ground_truth_entities"] = {
+            "column": entity_column,
+            "documents_with_annotations": int(documents_with_ground_truth_entities),
+            "average_entities_per_document": (
+                float(sum(ground_truth_counts) / total_documents)
+                if ground_truth_counts
+                else 0.0
+            ),
+            "unique_entity_count": int(
+                len({
+                    entity
+                    for values in ground_truth_entities.values()
+                    for entity in values
+                })
+            ),
+        }
 
-    return documents, dataset_summary
+    return documents, dataset_summary, ground_truth_entities
 
 
 def _resolve_workflow_overrides(
@@ -366,6 +403,70 @@ def _count_items(value: Any) -> int:
     return 1
 
 
+def _stringify_identifier(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, dict):
+        for key in ("name", "title", "entity", "value", "text"):
+            if key in value:
+                nested = _stringify_identifier(value[key])
+                if nested is not None:
+                    return nested
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except TypeError:
+            return str(value)
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        if pd.isna(value):
+            return None
+        return str(value)
+    text = str(value).strip()
+    return text or None
+
+
+def _stringify_collection(value: Any) -> list[str | None]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, tuple):
+        items = list(value)
+    elif isinstance(value, set):
+        items = list(value)
+    elif isinstance(value, np.ndarray):
+        items = value.tolist()
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                try:
+                    parsed = ast.literal_eval(text)
+                except (ValueError, SyntaxError):
+                    parsed = None
+            if isinstance(parsed, (list, tuple, set, np.ndarray)):
+                items = list(parsed)
+            else:
+                items = [text]
+        else:
+            items = [text]
+    else:
+        items = [value]
+
+    result: list[str | None] = []
+    for item in items:
+        result.append(_stringify_identifier(item))
+    return result
+
+
 def _entity_identifier_sets(entities: pd.DataFrame) -> dict[str, set[str]]:
     identifiers: dict[str, set[str]] = {}
     for column in ["title", "id", "human_readable_id"]:
@@ -378,6 +479,207 @@ def _entity_identifier_sets(entities: pd.DataFrame) -> dict[str, set[str]]:
             if normalised:
                 identifiers[column] = normalised
     return identifiers
+
+
+def _entities_by_document(
+    entities: Optional[pd.DataFrame],
+    text_units: Optional[pd.DataFrame],
+) -> dict[str, set[str]]:
+    if entities is None or entities.empty or text_units is None or text_units.empty:
+        return {}
+
+    if "text_unit_ids" not in entities.columns:
+        return {}
+
+    text_unit_id_column = "id" if "id" in text_units.columns else None
+    if text_unit_id_column is None:
+        return {}
+
+    document_column = None
+    for candidate in ["document_ids", "document_id", "document"]:
+        if candidate in text_units.columns:
+            document_column = candidate
+            break
+    if document_column is None:
+        return {}
+
+    text_unit_to_documents: dict[str, set[str]] = {}
+    for _, row in text_units.iterrows():
+        text_unit_identifier = _stringify_identifier(row.get(text_unit_id_column))
+        if text_unit_identifier is None:
+            continue
+        raw_doc_ids = _stringify_collection(row.get(document_column))
+        doc_ids = {
+            doc_id
+            for doc_id in raw_doc_ids
+            if doc_id is not None
+        }
+        if doc_ids:
+            text_unit_to_documents[text_unit_identifier] = doc_ids
+
+    document_entities: dict[str, set[str]] = defaultdict(set)
+    for _, row in entities.iterrows():
+        entity_title = row.get("title")
+        if not _has_content(entity_title):
+            continue
+        entity_name = str(entity_title).strip()
+        for text_unit_id in _stringify_collection(row.get("text_unit_ids")):
+            if text_unit_id is None:
+                continue
+            for document_id in text_unit_to_documents.get(text_unit_id, set()):
+                document_entities[document_id].add(entity_name)
+
+    return {doc_id: set(values) for doc_id, values in document_entities.items()}
+
+
+def _normalised_lookup(values: Iterable[str]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for value in values:
+        if value is None:
+            continue
+        token = _normalize_token(value)
+        if token is None:
+            continue
+        lookup.setdefault(token, value)
+    return lookup
+
+
+def _safe_divide(numerator: float, denominator: float) -> float:
+    if not denominator:
+        return 0.0
+    return float(numerator / denominator)
+
+
+def _evaluate_ner(
+    ground_truth_entities: dict[str, set[str]],
+    predicted_entities: dict[str, set[str]],
+    example_limit: int = 5,
+) -> dict[str, Any]:
+    metrics: dict[str, Any] = {
+        "status": "missing_ground_truth" if not ground_truth_entities else "ok",
+        "documents_with_ground_truth": int(len(ground_truth_entities)),
+        "documents_with_predictions": 0,
+        "documents_missing_predictions": 0,
+        "documents_with_annotations": 0,
+        "documents_with_exact_match": 0,
+        "micro": {"precision": 0.0, "recall": 0.0, "f1": 0.0},
+        "macro": {"precision": None, "recall": None, "f1": None},
+    }
+
+    if not ground_truth_entities:
+        return metrics
+
+    total_tp = total_fp = total_fn = 0
+    doc_precisions: list[float] = []
+    doc_recalls: list[float] = []
+    doc_f1s: list[float] = []
+    false_negative_examples: list[dict[str, Any]] = []
+    false_positive_examples: list[dict[str, Any]] = []
+
+    docs_with_predictions = 0
+    docs_with_exact_match = 0
+    docs_with_annotations = 0
+
+    extra_predicted_documents = [
+        doc_id
+        for doc_id in predicted_entities
+        if doc_id not in ground_truth_entities
+    ]
+
+    for document_id, truth_values in ground_truth_entities.items():
+        truth_lookup = _normalised_lookup(truth_values)
+        pred_lookup = _normalised_lookup(predicted_entities.get(document_id, set()))
+        truth_norm = set(truth_lookup)
+        pred_norm = set(pred_lookup)
+
+        if truth_norm:
+            docs_with_annotations += 1
+
+        if pred_norm:
+            docs_with_predictions += 1
+        elif truth_norm:
+            metrics["documents_missing_predictions"] += 1
+
+        tp = len(truth_norm & pred_norm)
+        fp = len(pred_norm - truth_norm)
+        fn = len(truth_norm - pred_norm)
+
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+        precision = (
+            _safe_divide(tp, tp + fp)
+            if pred_norm
+            else (1.0 if not truth_norm else 0.0)
+        )
+        recall = (
+            _safe_divide(tp, tp + fn)
+            if truth_norm
+            else (1.0 if not pred_norm else 0.0)
+        )
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
+
+        doc_precisions.append(precision)
+        doc_recalls.append(recall)
+        doc_f1s.append(f1)
+
+        if fn:
+            false_negative_examples.append(
+                {
+                    "document_id": document_id,
+                    "missing": sorted(truth_lookup[token] for token in truth_norm - pred_norm),
+                }
+            )
+        if fp:
+            false_positive_examples.append(
+                {
+                    "document_id": document_id,
+                    "extra": sorted(pred_lookup[token] for token in pred_norm - truth_norm),
+                }
+            )
+
+        if truth_norm == pred_norm:
+            docs_with_exact_match += 1
+
+    metrics["documents_with_predictions"] = int(docs_with_predictions)
+    metrics["documents_with_exact_match"] = int(docs_with_exact_match)
+    metrics["documents_with_annotations"] = int(docs_with_annotations)
+
+    precision_micro = _safe_divide(total_tp, total_tp + total_fp)
+    recall_micro = _safe_divide(total_tp, total_tp + total_fn)
+    f1_micro = (
+        2 * precision_micro * recall_micro / (precision_micro + recall_micro)
+        if (precision_micro + recall_micro) > 0
+        else 0.0
+    )
+
+    metrics["micro"] = {
+        "precision": precision_micro,
+        "recall": recall_micro,
+        "f1": f1_micro,
+    }
+
+    if doc_precisions:
+        metrics["macro"] = {
+            "precision": float(sum(doc_precisions) / len(doc_precisions)),
+            "recall": float(sum(doc_recalls) / len(doc_recalls)),
+            "f1": float(sum(doc_f1s) / len(doc_f1s)),
+        }
+
+    metrics["examples"] = {
+        "false_negatives": false_negative_examples[:example_limit],
+        "false_positives": false_positive_examples[:example_limit],
+    }
+
+    if extra_predicted_documents:
+        metrics["extra_predicted_documents"] = extra_predicted_documents[:example_limit]
+
+    return metrics
 
 
 def _evaluate_entities(
@@ -648,7 +950,11 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
     config = _build_config(args, root_dir, token)
     logger.info("Config:\n%s", pformat(config))
 
-    documents, dataset_summary = _load_finance_documents(
+    (
+        documents,
+        dataset_summary,
+        ground_truth_entities,
+    ) = _load_finance_documents(
         dataset_name=args.dataset_name,
         split=args.split,
         max_documents=args.max_documents,
@@ -656,6 +962,7 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         text_column=args.text_column,
         title_column=args.title_column,
         metadata_columns=args.metadata_columns,
+        entity_column=args.ground_truth_entity_column,
     )
     run_logger.info(
         "Loaded dataset '%s' split '%s' with %s documents (max=%s, debug_limit=%s)",
@@ -740,6 +1047,13 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         _entity_identifier_sets(artifacts["entities"]),
     )
 
+    predicted_entities = _entities_by_document(
+        artifacts["entities"],
+        artifacts["text_units"],
+    )
+    ner_metrics = _evaluate_ner(ground_truth_entities, predicted_entities)
+    entity_metrics["ground_truth_comparison"] = ner_metrics
+
     graph_info = _graph_summary(
         {
             key: df
@@ -781,6 +1095,8 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
             ]
         },
     }
+
+    evaluation_report["entity_ground_truth"] = ner_metrics
 
     run_logger.info("Indexing evaluation completed successfully")
     run_logger.debug("Evaluation report:\n%s", pformat(evaluation_report))
@@ -837,6 +1153,14 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         nargs="*",
         default=None,
         help="Optional metadata columns to preserve in the document store.",
+    )
+    parser.add_argument(
+        "--ground-truth-entity-column",
+        default=None,
+        help=(
+            "Dataset column containing ground truth entity annotations for each document. "
+            "When provided, the script computes NER precision/recall against GraphRAG outputs."
+        ),
     )
     parser.add_argument(
         "--model-name",
