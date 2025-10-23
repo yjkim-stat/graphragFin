@@ -138,6 +138,21 @@ def _is_docred_like_example(example: dict[str, Any]) -> bool:
     return has_tokenised_sentence and has_entity_clusters
 
 
+def _is_token_tag_example(example: dict[str, Any]) -> bool:
+    """Identify token-level NER examples with parallel token/tag sequences."""
+
+    tokens = example.get("tokens")
+    tags = example.get("ner_tags")
+
+    if not isinstance(tokens, (list, tuple)) or not isinstance(tags, (list, tuple)):
+        return False
+
+    if not tokens or not tags or len(tokens) != len(tags):
+        return False
+
+    return True
+
+
 def _docred_sentences_to_text(sentences: Any) -> str:
     """Join tokenised sentences into a newline-separated document string."""
 
@@ -233,6 +248,230 @@ def _preprocess_docred_like_example(
     }
 
 
+def _token_tag_label_lookup(feature: Any) -> tuple[dict[int, str] | None, list[str]]:
+    """Extract the label names for Sequence(ClassLabel) style ner_tags features."""
+
+    if feature is None:
+        return None, []
+
+    names: Optional[Iterable[str]] = None
+
+    try:
+        # Sequence(ClassLabel) exposes the underlying ClassLabel via ``feature``
+        if hasattr(feature, "feature"):
+            subfeature = getattr(feature, "feature")
+        else:
+            subfeature = feature
+        names = getattr(subfeature, "names", None)
+    except Exception:  # pragma: no cover - defensive against feature quirks
+        names = None
+
+    if not names:
+        return None, []
+
+    ordered_names = list(names)
+    return {index: name for index, name in enumerate(ordered_names)}, ordered_names
+
+
+def _detokenize(tokens: Iterable[str]) -> str:
+    """Reconstruct text from space-separated tokens with simple punctuation rules."""
+
+    result = ""
+    previous_token = ""
+
+    no_space_before = {
+        ".",
+        ",",
+        ":",
+        ";",
+        "!",
+        "?",
+        "%",
+        "''",
+        "\"",
+        "'",
+        "”",
+        "’",
+        "»",
+        ")",
+        "]",
+        "}",
+    }
+    contractions = {
+        "'s",
+        "'re",
+        "'m",
+        "'ve",
+        "'d",
+        "'ll",
+        "n't",
+    }
+    no_space_after = {"(", "[", "{", "$", "``", "“", "‘", "«"}
+
+    for token in tokens:
+        if token is None:
+            continue
+        piece = str(token)
+        if not piece:
+            continue
+
+        if not result:
+            result = piece
+        elif piece in no_space_before or piece in contractions or piece.startswith("'"):
+            result += piece
+        elif previous_token in no_space_after:
+            result += piece
+        else:
+            result += f" {piece}"
+
+        previous_token = piece
+
+    return result
+
+
+def _extract_token_tag_entities(
+    tokens: Any,
+    tags: Any,
+    label_lookup: Optional[dict[int, str]] = None,
+) -> tuple[list[str], int, dict[str, int]]:
+    """Collapse BIO-style token/tag annotations into canonical entity strings."""
+
+    token_list = list(tokens) if isinstance(tokens, (list, tuple)) else None
+    tag_list = list(tags) if isinstance(tags, (list, tuple)) else None
+
+    if token_list is None or tag_list is None:
+        return [], 0, {}
+
+    tokens = token_list
+    tags = tag_list
+
+    span_count = 0
+    label_counts: dict[str, int] = defaultdict(int)
+    entities: list[str] = []
+    seen: set[str] = set()
+
+    entity_tokens: list[str] = []
+    entity_label: Optional[str] = None
+
+    prefix_map = {"U": "S", "L": "E", "M": "I"}
+
+    def flush() -> None:
+        nonlocal entity_tokens, entity_label, span_count
+        if entity_tokens:
+            text = _detokenize(entity_tokens).strip()
+            if text:
+                span_count += 1
+                if entity_label:
+                    label_counts[entity_label] += 1
+                key = text.lower()
+                if key not in seen:
+                    seen.add(key)
+                    entities.append(text)
+        entity_tokens = []
+        entity_label = None
+
+    for token, raw_tag in zip(tokens, tags):
+        token_text = str(token).strip() if token is not None else ""
+        if not token_text:
+            flush()
+            continue
+
+        label_name: Optional[str] = None
+        if label_lookup is not None:
+            if isinstance(raw_tag, (int, np.integer)):
+                label_name = label_lookup.get(int(raw_tag))
+            elif isinstance(raw_tag, str) and raw_tag.isdigit():
+                label_name = label_lookup.get(int(raw_tag))
+
+        if label_name is None:
+            label_name = str(raw_tag) if raw_tag is not None else "O"
+
+        label_name = label_name.strip()
+        if not label_name:
+            label_name = "O"
+
+        if label_name.upper() == "O":
+            flush()
+            continue
+
+        if "-" in label_name:
+            prefix, label = label_name.split("-", 1)
+        else:
+            prefix, label = label_name, label_name
+
+        prefix = prefix_map.get(prefix.upper(), prefix.upper())
+        label = label.strip() or label_name
+
+        if prefix == "O":
+            flush()
+            continue
+
+        if prefix in {"B", "S"} or entity_label != label:
+            flush()
+            entity_label = label
+            entity_tokens = [token_text]
+            if prefix in {"S", "E"}:
+                flush()
+        else:
+            entity_tokens.append(token_text)
+            if prefix == "E":
+                flush()
+
+    flush()
+
+    return entities, span_count, dict(label_counts)
+
+
+def _preprocess_token_tag_example(
+    example: dict[str, Any],
+    default_title: str,
+    label_lookup: Optional[dict[int, str]] = None,
+) -> dict[str, Any]:
+    """Normalise token/tag style examples for the finance indexing workflow."""
+
+    raw_tokens = example.get("tokens")
+    tokens = list(raw_tokens) if isinstance(raw_tokens, (list, tuple)) else []
+    token_strings = [str(token).strip() if token is not None else "" for token in tokens]
+    text = _detokenize(token_strings).strip()
+
+    raw_title = example.get("title")
+    if isinstance(raw_title, str) and raw_title.strip():
+        title = raw_title.strip()
+    else:
+        raw_id = example.get("id")
+        if isinstance(raw_id, str) and raw_id.strip():
+            title = raw_id.strip()
+        elif isinstance(raw_id, (int, np.integer)):
+            title = f"Document {raw_id}"
+        else:
+            title = default_title
+
+    raw_tags = example.get("ner_tags")
+    tag_list = list(raw_tags) if isinstance(raw_tags, (list, tuple)) else []
+
+    entities, span_count, label_counts = _extract_token_tag_entities(
+        token_strings, tag_list, label_lookup
+    )
+
+    metadata: dict[str, Any] = {
+        "token_count": len(tokens),
+        "tag_count": len(tag_list),
+    }
+    if entities:
+        metadata["unique_entity_count"] = len(entities)
+    if span_count:
+        metadata["entity_span_count"] = span_count
+    if label_counts:
+        metadata["entity_label_counts"] = dict(sorted(label_counts.items()))
+
+    return {
+        "title": title,
+        "text": text,
+        "entities": entities,
+        "metadata": metadata or None,
+    }
+
+
 def _normalise_creation_date(value: Any) -> str:
     """Convert a raw creation date value into an ISO-8601 string."""
 
@@ -264,6 +503,9 @@ def _load_finance_documents(
 
     first_example = dataset[0]
     docred_like = _is_docred_like_example(first_example)
+    token_tag_like = False
+    token_tag_label_lookup: dict[int, str] | None = None
+    token_tag_label_names: list[str] = []
 
     if docred_like:
         resolved_text_column = text_column or "sents"
@@ -274,10 +516,28 @@ def _load_finance_documents(
             else None
         )
     else:
-        resolved_text_column = text_column or _guess_text_column(first_example)
-        resolved_title_column = title_column or _guess_title_column(
-            first_example, resolved_text_column
-        )
+        token_tag_like = _is_token_tag_example(first_example)
+        if token_tag_like:
+            resolved_text_column = text_column or "tokens"
+            resolved_title_column = title_column or None
+            features_obj = getattr(dataset, "features", None)
+            ner_feature = None
+            if features_obj is not None:
+                if hasattr(features_obj, "get"):
+                    ner_feature = features_obj.get("ner_tags")
+                else:
+                    try:
+                        ner_feature = features_obj["ner_tags"]
+                    except Exception:  # pragma: no cover - defensive
+                        ner_feature = None
+            token_tag_label_lookup, token_tag_label_names = _token_tag_label_lookup(
+                ner_feature
+            )
+        else:
+            resolved_text_column = text_column or _guess_text_column(first_example)
+            resolved_title_column = title_column or _guess_title_column(
+                first_example, resolved_text_column
+            )
 
     rows: list[dict[str, Any]] = []
     text_lengths: list[int] = []
@@ -304,6 +564,17 @@ def _load_finance_documents(
 
         if docred_like:
             processed = _preprocess_docred_like_example(example, f"Document {idx}")
+            text = processed["text"] or ""
+            title = processed["title"]
+            if processed["metadata"]:
+                metadata_values.update(processed["metadata"])
+            parsed_entities = {
+                entity for entity in processed.get("entities", []) if entity
+            }
+        elif token_tag_like:
+            processed = _preprocess_token_tag_example(
+                example, f"Document {idx}", token_tag_label_lookup
+            )
             text = processed["text"] or ""
             title = processed["title"]
             if processed["metadata"]:
@@ -345,6 +616,13 @@ def _load_finance_documents(
                 documents_with_ground_truth_entities += 1
             ground_truth_counts.append(len(parsed_entities))
             ground_truth_entities[_stringify_identifier(document_id) or str(idx)] = parsed_entities
+        elif token_tag_like:
+            if parsed_entities:
+                documents_with_ground_truth_entities += 1
+            ground_truth_counts.append(len(parsed_entities))
+            ground_truth_entities[
+                _stringify_identifier(document_id) or str(idx)
+            ] = parsed_entities
         elif entity_column:
             raw_entities = example.get(entity_column)
             parsed_from_column = {
@@ -374,6 +652,15 @@ def _load_finance_documents(
     }
     if docred_like:
         dataset_summary["docred_like_format"] = True
+    if token_tag_like:
+        token_tag_info: dict[str, Any] = {
+            "token_column": resolved_text_column,
+            "tag_column": "ner_tags",
+        }
+        if token_tag_label_names:
+            token_tag_info["label_count"] = int(len(token_tag_label_names))
+            token_tag_info["label_examples"] = token_tag_label_names[:10]
+        dataset_summary["token_tag_format"] = token_tag_info
     if metadata_columns:
         dataset_summary["metadata_columns"] = metadata_columns
     if debug_document_limit is not None:
@@ -397,6 +684,8 @@ def _load_finance_documents(
         }
         if docred_like and not entity_column:
             ground_truth_summary["source"] = "vertexSet"
+        elif token_tag_like and not entity_column:
+            ground_truth_summary["source"] = "ner_tags"
         elif entity_column:
             ground_truth_summary["column"] = entity_column
         dataset_summary["ground_truth_entities"] = ground_truth_summary
