@@ -1427,6 +1427,9 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         args.max_documents,
         args.debug_document_limit,
     )
+    run_logger.info(f"sorted(ground_truth_entities):{sorted(ground_truth_entities)}")
+    run_logger.info(f"documents.iloc[0].to_dict():{pformat(documents.iloc[0].to_dict())}")
+    run_logger.info(f"documents.iloc[0]['text']:{pformat(documents.iloc[0]['text'])}")
 
     indexing_method = IndexingMethod(args.indexing_method)
     run_logger.info("Indexing method: %s", indexing_method)
