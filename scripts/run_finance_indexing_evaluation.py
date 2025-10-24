@@ -1005,8 +1005,23 @@ def _evaluate_ner(
         "macro": {"precision": None, "recall": None, "f1": None},
     }
 
+    def _sorted_vertices(entity_map: dict[str, set[str]]) -> list[str]:
+        aggregated: dict[str, str] = {}
+        for values in entity_map.values():
+            for value in values:
+                token = _normalize_token(value)
+                if token is None:
+                    continue
+                aggregated.setdefault(token, str(value).strip())
+        return sorted(aggregated.values(), key=lambda item: item.casefold())
+
     if not ground_truth_entities:
+        metrics["sorted_ground_truth_vertices"] = []
+        metrics["sorted_extracted_truth_vertices"] = _sorted_vertices(predicted_entities)
         return metrics
+
+    metrics["sorted_ground_truth_vertices"] = _sorted_vertices(ground_truth_entities)
+    metrics["sorted_extracted_truth_vertices"] = _sorted_vertices(predicted_entities)
 
     total_tp = total_fp = total_fn = 0
     doc_precisions: list[float] = []
