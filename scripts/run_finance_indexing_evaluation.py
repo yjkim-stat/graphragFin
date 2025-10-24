@@ -1695,5 +1695,19 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     print(f"Saved indexing evaluation report to {args.output_file}")
 
 
+def set_seed(seed):
+    import random
+    import torch 
+    import torch.backends.cudnn as cudnn
+    
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    cudnn.benchmark = False
+    cudnn.deterministic = True
+    random.seed(seed)
+
 if __name__ == "__main__":
+    set_seed(123)
     main()
