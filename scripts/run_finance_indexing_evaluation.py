@@ -496,7 +496,6 @@ def _load_finance_documents(
     entity_column: Optional[str],
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, set[str]]]:
     """Load the finance dataset and normalise it into a DataFrame."""
-
     dataset = load_dataset(dataset_name, split=split)
     if len(dataset) == 0:
         raise ValueError("Loaded dataset is empty.")
@@ -1389,6 +1388,7 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     config = _build_config(args, root_dir, token)
     logger.info("Config:\n%s", pformat(config))
+    run_logger.info(f'args.dataset_name:{args.dataset_name}')
 
     (
         documents,
