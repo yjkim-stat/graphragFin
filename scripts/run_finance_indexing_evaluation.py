@@ -90,6 +90,23 @@ def _setup_logger(log_dir: Path, level: int = logging.INFO) -> logging.Logger:
     return logger
 
 
+def _serialise_args(args: argparse.Namespace) -> dict[str, Any]:
+    """Return a JSON-serialisable snapshot of relevant CLI arguments."""
+
+    excluded_keys = {"huggingface_token"}
+    serialised: dict[str, Any] = {}
+    for key, value in vars(args).items():
+        if key in excluded_keys:
+            continue
+        if isinstance(value, Path):
+            serialised[key] = str(value)
+        elif isinstance(value, (list, tuple)):
+            serialised[key] = list(value)
+        else:
+            serialised[key] = value
+    return serialised
+
+
 def _ensure_workspace(root_dir: Path) -> None:
     """Create the directory tree expected by GraphRAG."""
 
@@ -1553,6 +1570,7 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
                 "covariates",
             ]
         },
+        "arguments": _serialise_args(args),
     }
 
     evaluation_report["entity_ground_truth"] = ner_metrics
