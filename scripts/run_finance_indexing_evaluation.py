@@ -401,6 +401,7 @@ def _extract_token_tag_entities(
 
         prefix = prefix_map.get(prefix.upper(), prefix.upper())
         label = label.strip() or label_name
+        logger.info(f'[_extract_token_tag_entities] {(token, token_text, prefix, label, raw_tag)}')
 
         if prefix == "O":
             flush()
@@ -589,7 +590,7 @@ def _load_finance_documents(
                 else f"Document {idx}"
             )
             parsed_entities = set()
-
+        logger.info(f'parsed_entities:{parsed_entities}')
         if metadata_columns:
             for key in metadata_columns:
                 if key in example:
@@ -1427,9 +1428,9 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         args.max_documents,
         args.debug_document_limit,
     )
-    run_logger.info(f"sorted(ground_truth_entities):{sorted(ground_truth_entities)}")
+    run_logger.info(f"sorted(ground_truth_entities):{ground_truth_entities}")
     run_logger.info(f"documents.iloc[0].to_dict():{pformat(documents.iloc[0].to_dict())}")
-    run_logger.info(f"documents.iloc[0]['text']:{pformat(documents.iloc[0]['text'])}")
+    run_logger.info(f"documents.iloc[0]['text']:{documents.iloc[0]['text']}")
 
     indexing_method = IndexingMethod(args.indexing_method)
     run_logger.info("Indexing method: %s", indexing_method)
