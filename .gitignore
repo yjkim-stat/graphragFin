@@ -1,4 +1,8 @@
-outputs
+outputs/llama3*
+outputs/*.csv
+outputs/*.json
+outputs/*.xlsx
+
 scripts/_*
 *__pycache__
 
