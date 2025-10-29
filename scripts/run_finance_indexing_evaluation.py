@@ -30,6 +30,9 @@ from graphrag.config.embeddings import default_embeddings
 from graphrag.config.enums import IndexingMethod
 from graphrag.config.models.graph_rag_config import GraphRagConfig
 from graphrag.index.workflows.factory import PipelineFactory
+from graphrag.language_model.providers.huggingface.chat_model import (
+    HuggingFaceChatModel,
+)
  
 
 LOGGER_NAME = "finance_graphrag_index_eval"
@@ -1437,14 +1440,24 @@ def _summarise_workflow_results(
 def _evaluate_indexing_run(
     stats_data: dict[str, Any],
     wall_time_seconds: float,
+    llm_usage_total: dict[str, int] | None = None,
+    llm_usage_by_model: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     workflows = stats_data.get("workflows", {}) if stats_data else {}
-    return {
+    metrics: dict[str, Any] = {
         "wall_time_seconds": float(wall_time_seconds),
         "reported_total_runtime_seconds": float(stats_data.get("total_runtime", 0.0)),
         "input_load_time_seconds": float(stats_data.get("input_load_time", 0.0)),
         "workflow_durations_seconds": workflows,
     }
+
+    if llm_usage_total or llm_usage_by_model:
+        metrics["llm_usage"] = {
+            "total": llm_usage_total or {},
+            "by_model": llm_usage_by_model or {},
+        }
+
+    return metrics
 
 
 async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
@@ -1498,6 +1511,8 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     indexing_method = IndexingMethod(args.indexing_method)
     run_logger.info("Indexing method: %s", indexing_method)
+
+    HuggingFaceChatModel.reset_usage()
 
     start_time = time.perf_counter()
     pipeline_results = await build_index(
@@ -1564,6 +1579,11 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         else {}
     )
 
+    llm_usage_by_model = HuggingFaceChatModel.get_usage()
+    llm_usage_total = HuggingFaceChatModel.get_total_usage()
+    if llm_usage_total.get("llm_calls", 0):
+        run_logger.info("Aggregated LLM usage: %s", llm_usage_total)
+
     entity_metrics = _evaluate_entities(artifacts["entities"], artifacts["relationships"])
     relationship_metrics = _evaluate_relationships(
         artifacts["relationships"],
@@ -1586,7 +1606,12 @@ async def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
         top_k=args.graph_top_k,
     )
 
-    indexing_metrics = _evaluate_indexing_run(stats_data, wall_time_seconds)
+    indexing_metrics = _evaluate_indexing_run(
+        stats_data,
+        wall_time_seconds,
+        llm_usage_total=llm_usage_total,
+        llm_usage_by_model=llm_usage_by_model,
+    )
 
     workflow_summaries = _summarise_workflow_results(pipeline_results)
 
