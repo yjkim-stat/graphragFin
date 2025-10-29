@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-from threading import Thread
+from threading import Lock, Thread
 
 from collections.abc import AsyncGenerator, Generator
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 try:
     import torch
@@ -38,6 +38,9 @@ class HuggingFaceModelResponse(BaseModelResponse[BaseModel]):
 
 class HuggingFaceChatModel:
     """Hugging Face-based chat model."""
+
+    _usage_lock: ClassVar[Lock] = Lock()
+    _usage_stats: ClassVar[dict[str, dict[str, int]]] = {}
 
     def __init__(
         self,
@@ -110,6 +113,74 @@ class HuggingFaceChatModel:
 
         self._generation_kwargs = self._resolve_generation_kwargs(raw_params)
 
+    @classmethod
+    def reset_usage(cls) -> None:
+        """Clear aggregated usage statistics for all Hugging Face chat models."""
+
+        with cls._usage_lock:
+            cls._usage_stats = {}
+
+    @classmethod
+    def get_usage(cls) -> dict[str, dict[str, int]]:
+        """Return cumulative usage statistics per registered chat model."""
+
+        with cls._usage_lock:
+            return {name: stats.copy() for name, stats in cls._usage_stats.items()}
+
+    @classmethod
+    def get_total_usage(cls) -> dict[str, int]:
+        """Return aggregate usage totals across all chat model instances."""
+
+        with cls._usage_lock:
+            totals = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "llm_calls": 0,
+            }
+            for stats in cls._usage_stats.values():
+                totals["prompt_tokens"] += stats.get("prompt_tokens", 0)
+                totals["completion_tokens"] += stats.get("completion_tokens", 0)
+                totals["total_tokens"] += stats.get("total_tokens", 0)
+                totals["llm_calls"] += stats.get("llm_calls", 0)
+            return totals
+
+    def _record_usage(self, prompt_tokens: int, completion_tokens: int) -> None:
+        """Record token usage for the current chat invocation."""
+
+        total_tokens = prompt_tokens + completion_tokens
+        with self.__class__._usage_lock:
+            stats = self.__class__._usage_stats.setdefault(
+                self.name,
+                {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "llm_calls": 0,
+                },
+            )
+            stats["prompt_tokens"] += prompt_tokens
+            stats["completion_tokens"] += completion_tokens
+            stats["total_tokens"] += total_tokens
+            stats["llm_calls"] += 1
+
+    def _build_usage_metrics(
+        self, prompt_text: str, completion_text: str
+    ) -> dict[str, int]:
+        """Calculate token usage metrics for a generated completion."""
+
+        prompt_tokens = len(self._tokenizer.encode(prompt_text))
+        completion_tokens = (
+            len(self._tokenizer.encode(completion_text)) if completion_text else 0
+        )
+        self._record_usage(prompt_tokens, completion_tokens)
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "llm_calls": 1,
+        }
+
     def _resolve_generation_kwargs(self, user_params: dict[str, Any]) -> dict[str, Any]:
         resolved: dict[str, Any] = dict(user_params)
         max_tokens = (
@@ -154,14 +225,21 @@ class HuggingFaceChatModel:
         turns.append(f"USER: {prompt}")
         return "\n".join(turns)
 
-    def _create_response(self, text: str, raw: Any, history: list) -> HuggingFaceModelResponse:
+    def _create_response(
+        self, text: str, raw: Any, history: list, metrics: dict[str, Any] | None = None
+    ) -> HuggingFaceModelResponse:
         if isinstance(raw, dict) or raw is None:
             full_response = raw
         else:
             full_response = {"text": str(raw)}
 
         output = HuggingFaceModelOutput(content=text, full_response=full_response)
-        return HuggingFaceModelResponse(output=output, history=history, cache_hit=False)
+        return HuggingFaceModelResponse(
+            output=output,
+            history=history,
+            cache_hit=False,
+            metrics=metrics,
+        )
 
     def _prepare_prompt(self, prompt: str, history: list | None, messages: list[dict[str, str]]) -> str:
         if self.task == "chat-completion" and hasattr(self._tokenizer, "apply_chat_template"):
@@ -229,7 +307,8 @@ class HuggingFaceChatModel:
         prompt_text = self._prepare_prompt(prompt, history, messages)
         text = self._generate_text(prompt_text, **kwargs)
         history_out = [*messages, {"role": "assistant", "content": text}]
-        return self._create_response(text, text, history_out)
+        metrics = self._build_usage_metrics(prompt_text, text)
+        return self._create_response(text, text, history_out, metrics)
 
     async def achat(
         self,
