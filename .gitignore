@@ -1,5 +1,6 @@
 outputs
 scripts/_*
+*__pycache__
 
 # Python Artifacts
 python/*/lib/
