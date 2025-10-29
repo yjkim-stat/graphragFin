@@ -22,7 +22,7 @@ from typing import Any, Iterable, Optional
 
 import numpy as np
 import pandas as pd
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 
 from graphrag.api.index import build_index
 from graphrag.config.create_graphrag_config import create_graphrag_config
@@ -122,6 +122,29 @@ def _ensure_workspace(root_dir: Path) -> None:
 
 
 def _guess_text_column(example: dict[str, Any]) -> str:
+    """Return a best-effort guess for the primary text column."""
+
+    preferred = [
+        "text",
+        "content",
+        "article",
+        "document",
+        "body",
+        "all_text",
+        "summary",
+    ]
+
+    for key in preferred:
+        value = example.get(key)
+        if isinstance(value, str) and value.strip():
+            return key
+
+    for key, value in example.items():
+        if key.lower() == "title":
+            continue
+        if isinstance(value, str) and value.strip():
+            return key
+
     for key, value in example.items():
         if isinstance(value, str) and value.strip():
             return key
@@ -503,6 +526,30 @@ def _normalise_creation_date(value: Any) -> str:
     return pd.Timestamp.now(tz="UTC").isoformat()
 
 
+def _load_dataset_from_source(dataset_name: str, split: str) -> Dataset:
+    """Load a dataset from Hugging Face or a local file."""
+
+    candidate_path = Path(dataset_name)
+    if candidate_path.exists():
+        suffix = candidate_path.suffix.lower()
+        if suffix == ".csv":
+            dataframe = pd.read_csv(candidate_path)
+        elif suffix in {".json", ".jsonl"}:
+            dataframe = pd.read_json(candidate_path, lines=suffix == ".jsonl")
+        else:
+            raise ValueError(
+                "Unsupported local dataset format. "
+                "Provide a .csv, .json, or .jsonl file or a Hugging Face dataset name."
+            )
+
+        if dataframe.empty:
+            raise ValueError("Loaded dataset is empty.")
+
+        return Dataset.from_pandas(dataframe.reset_index(drop=True), preserve_index=False)
+
+    return load_dataset(dataset_name, split=split)
+
+
 def _load_finance_documents(
     dataset_name: str,
     split: str,
@@ -514,7 +561,7 @@ def _load_finance_documents(
     entity_column: Optional[str],
 ) -> tuple[pd.DataFrame, dict[str, Any], dict[str, set[str]]]:
     """Load the finance dataset and normalise it into a DataFrame."""
-    dataset = load_dataset(dataset_name, split=split)
+    dataset = _load_dataset_from_source(dataset_name, split)
     if len(dataset) == 0:
         raise ValueError("Loaded dataset is empty.")
 
@@ -1591,7 +1638,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--dataset-name",
         default="AnonymousLLMer/finance-corpus-krx",
-        help="Hugging Face dataset identifier to load.",
+        help=(
+            "Hugging Face dataset identifier or path to a local CSV/JSON/JSONL file to load."
+        ),
     )
     parser.add_argument(
         "--skip-community-reports",
