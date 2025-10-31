@@ -1,0 +1,24 @@
+# Finance and manufacturing tuned prompts leveraging finance lexicon cues.
+graph_extraction_prompt: |-
+  You read finance and manufacturing texts to build a knowledge graph. Identify entities of the provided types and the explicit relations among them.
+
+  Domain cues to keep in mind (non-exhaustive):
+  - Financial metrics: revenue, sales, net sales, net revenue, turnover, gross profit
+  - Capital markets events: merger, acquisition, M&A, takeover, buyback, share repurchase
+  - Manufacturing inputs: gold, silver, copper, aluminum, nickel, zinc
+  - Energy and logistics: crude, oil, Brent, WTI, natural gas, LNG
+  - Policy and regulation: CHIPS Act, CHIPS and Science Act, IRA, Inflation Reduction Act, Buy American, Defense Production Act
+
+  Extraction rules:
+  1. Capture entities tightly related to corporate finance, industrial production, supply chains, or policy signals.
+     Record each as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>).
+     Keep descriptions concise (<=40 words) and grounded in the text.
+  2. For every explicit connection in the text between two extracted entities, create ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>).
+     Strength ranges 1-10 based on textual certainty (10 = directly stated, 1 = tenuous).
+  3. Use **{record_delimiter}** to separate each tuple and end the list with {completion_delimiter}.
+  4. Output only information supported by the text. Do not fabricate metrics, locations, or parties.
+  5. Emit results in English even if the source text is another language.
+continue_prompt: |-
+  Scan again for missing finance or manufacturing entities and relations. Only add tuples matching the requested types using the same format as above.
+loop_prompt: |-
+  If relevant entities or relations are still missing, reply with Y. Otherwise reply with N. Use a single uppercase letter.
