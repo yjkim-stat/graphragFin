@@ -150,16 +150,17 @@ def extract_rule_based_entities(text: str) -> List[str]:
     if not isinstance(text, str):
         return []
 
-    money = [m.group(0) for m in MONEY_RE.finditer(text)]
-    percent = [p.group(0) for p in PERCENT_RE.finditer(text)]
-    years = re.findall(r"\b(?:19|20)\d{2}\b", text)
-    date_phrases = [d.group(0) for d in DATE_PHRASE_RE.finditer(text)]
+    # money = [m.group(0) for m in MONEY_RE.finditer(text)]
+    # percent = [p.group(0) for p in PERCENT_RE.finditer(text)]
+    # years = re.findall(r"\b(?:19|20)\d{2}\b", text)
+    # date_phrases = [d.group(0) for d in DATE_PHRASE_RE.finditer(text)]
     proper_phrases = proper_noun_chunks(text)
     finance_entities = flatten_finance_entities(enrich_entities_with_finance(text))
 
     raw_entities = [
         e
-        for e in money + percent + years + date_phrases + proper_phrases + finance_entities
+        # for e in money + percent + years + date_phrases + proper_phrases + finance_entities
+        for e in proper_phrases + finance_entities
         if isinstance(e, str) and e
     ]
     return unique_preserve_order(normalize_entity(e) for e in raw_entities)
