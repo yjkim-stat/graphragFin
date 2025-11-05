@@ -1,97 +1,20 @@
+"""Utility helpers shared across finance experiment scripts."""
+
 from __future__ import annotations
 
 import argparse
-import asyncio
-import json
 import logging
-import os
 from pathlib import Path
-from pprint import pformat
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from datasets import load_dataset
 
-from graphrag.api.index import build_index
 from graphrag.config.create_graphrag_config import create_graphrag_config
-from graphrag.config.embeddings import entity_description_embedding
-from graphrag.config.embeddings import (
-    entity_description_embedding,
-    default_embeddings,
-)
+from graphrag.config.embeddings import default_embeddings
 from graphrag.config.enums import IndexingMethod
 from graphrag.config.models.graph_rag_config import GraphRagConfig
 from graphrag.index.workflows.factory import PipelineFactory
-from graphrag.query.factory import get_local_search_engine
-from graphrag.query.indexer_adapters import (
-    read_indexer_covariates,
-    read_indexer_entities,
-    read_indexer_relationships,
-    read_indexer_reports,
-    read_indexer_text_units,
-)
-from graphrag.utils.api import get_embedding_store, reformat_context_data
-
-
-LOGGER_NAME = "finance_graphrag"
-logger = logging.getLogger(LOGGER_NAME)
-
-
-def _compute_cost(
-    prompt_tokens: int,
-    completion_tokens: int,
-    prompt_cost_per_1k: float,
-    completion_cost_per_1k: float,
-) -> float:
-    return (
-        (prompt_tokens / 1000.0) * prompt_cost_per_1k
-        + (completion_tokens / 1000.0) * completion_cost_per_1k
-    )
-
-
-def _ensure_workspace(root_dir: Path) -> None:
-    """Create the directory tree expected by GraphRAG."""
-
-    root_dir.mkdir(parents=True, exist_ok=True)
-    for relative in [
-        "cache",
-        "logs",
-        "output",
-        "output/lancedb",
-        "update_output",
-    ]:
-        (root_dir / relative).mkdir(parents=True, exist_ok=True)
-
-
-def _graph_summary(artifacts: dict[str, pd.DataFrame], top_k: int) -> dict[str, Any]:
-    summary: dict[str, Any] = {
-        "counts": {name: len(df) for name, df in artifacts.items()},
-    }
-    entities = artifacts.get("entities")
-    if entities is not None and "degree" in entities.columns:
-        top_entities = (
-            entities.nlargest(min(top_k, len(entities)), "degree")
-            .loc[:, [col for col in ["id", "title", "degree"] if col in entities.columns]]
-            .to_dict(orient="records")
-        )
-        summary["top_entities_by_degree"] = top_entities
-    relationships = artifacts.get("relationships")
-    if relationships is not None:
-        cols = [c for c in ["source", "target", "description", "weight"] if c in relationships.columns]
-        summary["sample_relationships"] = (
-            relationships.head(min(top_k, len(relationships))).loc[:, cols].to_dict(orient="records")
-            if cols
-            else []
-        )
-    communities = artifacts.get("communities")
-    if communities is not None:
-        for col in ["level", "size"]:
-            if col in communities.columns:
-                summary.setdefault("communities", {})[f"{col}_distribution"] = (
-                    communities[col].value_counts().to_dict()
-                )
-    return summary
 
 
 def _json_default(value: Any) -> Any:
@@ -101,7 +24,7 @@ def _json_default(value: Any) -> Any:
         return value.to_dict(orient="records")
     if isinstance(value, (np.integer, np.floating)):
         return value.item()
-    if isinstance(value, (np.ndarray,)):
+    if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, Path):
         return str(value)
@@ -110,21 +33,18 @@ def _json_default(value: Any) -> Any:
     return str(value)
 
 
-def _load_parquet(output_dir: Path, filename: str) -> Optional[pd.DataFrame]:
-    file_path = output_dir / filename
-    if not file_path.exists():
-        return None
-    return pd.read_parquet(file_path)
-
-
-def _setup_logger(log_dir: Path, level: int = logging.INFO) -> logging.Logger:
-    """Configure a module-level logger with a file handler."""
+def _setup_logger(
+    logger: logging.Logger,
+    log_dir: Path,
+    log_filename: str,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Configure a logger with both file and stream handlers."""
 
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "run_finance_graphrag.log"
+    log_file = log_dir / log_filename
 
     logger.setLevel(level)
-
     formatter = logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
     )
@@ -155,7 +75,60 @@ def _setup_logger(log_dir: Path, level: int = logging.INFO) -> logging.Logger:
     return logger
 
 
-def _build_config(args: argparse.Namespace, root_dir: Path, token: str) -> GraphRagConfig:
+def _ensure_workspace(root_dir: Path) -> None:
+    """Create the directory tree expected by GraphRAG."""
+
+    root_dir.mkdir(parents=True, exist_ok=True)
+    for relative in [
+        "cache",
+        "logs",
+        "output",
+        "output/lancedb",
+        "update_output",
+    ]:
+        (root_dir / relative).mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_workflow_overrides(
+    indexing_method: str,
+    skip_community_reports: bool,
+) -> list[str] | None:
+    """Return a workflow list with community report stages removed when requested."""
+
+    if not skip_community_reports:
+        return None
+
+    try:
+        method_enum = IndexingMethod(indexing_method)
+    except ValueError:
+        return None
+
+    base_workflows = (
+        PipelineFactory.pipelines.get(method_enum)
+        or PipelineFactory.pipelines.get(method_enum.value)
+        or []
+    )
+    if not base_workflows:
+        return None
+
+    skip_steps = {
+        "create_community_reports",
+        "create_community_reports_text",
+        "update_community_reports",
+    }
+    filtered = [step for step in base_workflows if step not in skip_steps]
+
+    if len(filtered) == len(base_workflows):
+        return None
+
+    return filtered
+
+
+def _build_config(
+    args: argparse.Namespace,
+    root_dir: Path,
+    token: str,
+) -> GraphRagConfig:
     """Create a GraphRAG configuration for Hugging Face providers."""
 
     config_dict: dict[str, Any] = {
@@ -220,36 +193,73 @@ def _build_config(args: argparse.Namespace, root_dir: Path, token: str) -> Graph
     return create_graphrag_config(config_dict, root_dir=str(root_dir))
 
 
-def _resolve_workflow_overrides(
-    indexing_method: str,
-    skip_community_reports: bool,
-) -> list[str] | None:
-    """Return a workflow list with community report stages removed when requested."""
+def _load_parquet(output_dir: Path, filename: str) -> Optional[pd.DataFrame]:
+    """Safely load a parquet artifact, returning ``None`` when missing."""
 
-    if not skip_community_reports:
+    file_path = output_dir / filename
+    if not file_path.exists():
         return None
+    return pd.read_parquet(file_path)
 
-    try:
-        method_enum = IndexingMethod(indexing_method)
-    except ValueError:
-        return None
 
-    base_workflows = (
-        PipelineFactory.pipelines.get(method_enum)
-        or PipelineFactory.pipelines.get(method_enum.value)
-        or []
-    )
-    if not base_workflows:
-        return None
+def _graph_summary(
+    artifacts: dict[str, pd.DataFrame],
+    top_k: int,
+) -> dict[str, Any]:
+    """Generate a lightweight summary of key graph artifacts."""
 
-    skip_steps = {
-        "create_community_reports",
-        "create_community_reports_text",
-        "update_community_reports",
+    summary: dict[str, Any] = {
+        "counts": {name: len(df) for name, df in artifacts.items()},
     }
-    filtered = [step for step in base_workflows if step not in skip_steps]
 
-    if len(filtered) == len(base_workflows):
-        return None
+    entities = artifacts.get("entities")
+    if entities is not None and "degree" in entities.columns:
+        top_entities = (
+            entities.nlargest(min(top_k, len(entities)), "degree")
+            .loc[
+                :,
+                [col for col in ["id", "title", "degree"] if col in entities.columns],
+            ]
+            .to_dict(orient="records")
+        )
+        summary["top_entities_by_degree"] = top_entities
 
-    return filtered
+    relationships = artifacts.get("relationships")
+    if relationships is not None:
+        cols = [
+            col
+            for col in ["source", "target", "description", "weight"]
+            if col in relationships.columns
+        ]
+        summary["sample_relationships"] = (
+            relationships.head(min(top_k, len(relationships))).loc[:, cols].to_dict(
+                orient="records"
+            )
+            if cols
+            else []
+        )
+
+    communities = artifacts.get("communities")
+    if communities is not None:
+        for col in ["level", "size"]:
+            if col in communities.columns:
+                summary.setdefault("communities", {})[f"{col}_distribution"] = (
+                    communities[col].value_counts().to_dict()
+                )
+
+    return summary
+
+
+def _compute_cost(
+    prompt_tokens: int,
+    completion_tokens: int,
+    prompt_cost_per_1k: float,
+    completion_cost_per_1k: float,
+) -> float:
+    """Estimate an LLM invocation cost given token counts and pricing."""
+
+    return (
+        (prompt_tokens / 1000.0) * prompt_cost_per_1k
+        + (completion_tokens / 1000.0) * completion_cost_per_1k
+    )
+
