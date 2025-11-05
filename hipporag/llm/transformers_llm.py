@@ -7,7 +7,7 @@ import time
 import hashlib
 import torch
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from filelock import FileLock
 
 from .base import BaseLLM, LLMConfig
@@ -90,7 +90,25 @@ class TransformersLLM(BaseLLM):
         self.cache = LLM_Cache(
             os.path.join(global_config.save_dir, "llm_cache"),
             self.llm_name.replace('/', '_'))
-        self.model = AutoModelForCausalLM.from_pretrained(self.global_config.llm_name, device_map='auto', torch_dtype = torch.bfloat16)
+
+        quantization_config = {
+            'load_in_4bit': True,
+            'load_in_8bit': False,
+            'bnb_4bit_use_double_quant': True,
+            'bnb_4bit_compute_dtype': 'float16',
+            'bnb_4bit_quant_type': 'nf4',
+        }
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.global_config.llm_name, 
+            torch_dtype = torch.float16,
+            device_map='auto', 
+            trust_remote_code=True, 
+            quantization_config=BitsAndBytesConfig(**quantization_config), 
+            cache_dir=os.getenv('CACHE_DIR'),
+            attn_implementation=os.getenv('ATTN_IMPLEMENTATION', "flash_attention_2"),
+            token=os.getenv('HF_TOKEN'),
+
+            )
         self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name)
 
         self.retry = 5

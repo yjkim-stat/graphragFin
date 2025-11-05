@@ -45,7 +45,7 @@ except ImportError:  # pragma: no cover - spaCy is an optional dependency at run
 
 import pandas as pd
 
-from lexicon_finance import enrich_entities_with_finance
+from lexicon_finance import enrich_entities_with_finance, preclean_text
 
 
 # ---------------------------------------------------------------------------
@@ -149,11 +149,13 @@ def proper_noun_chunks(text: str) -> List[str]:
 def extract_rule_based_entities(text: str) -> List[str]:
     if not isinstance(text, str):
         return []
+    text = preclean_text(text)  # << [NEW]
 
     # money = [m.group(0) for m in MONEY_RE.finditer(text)]
     # percent = [p.group(0) for p in PERCENT_RE.finditer(text)]
     # years = re.findall(r"\b(?:19|20)\d{2}\b", text)
     # date_phrases = [d.group(0) for d in DATE_PHRASE_RE.finditer(text)]
+    
     proper_phrases = proper_noun_chunks(text)
     finance_entities = flatten_finance_entities(enrich_entities_with_finance(text))
 
@@ -213,6 +215,7 @@ def _chunk_to_phrase(chunk) -> str:
 def analyze_with_pos(text: str) -> Tuple[List[str], List[str], List[str]]:
     if not isinstance(text, str) or not text.strip():
         return [], [], []
+    text = preclean_text(text)  # << [NEW]
 
     nlp = get_spacy_model(args.spacy_model)
     doc = nlp(text)
@@ -388,7 +391,7 @@ summary_md += f"**POS tagging enabled:** {args.pos_tagging}\n\n"
 summary_md += "## Top Entities\n\n"
 
 if not summary_df.empty:
-    summary_md += summary_df.head(200).to_markdown(index=False)
+    summary_md += summary_df.head(500).to_markdown(index=False)
 else:
     summary_md += "_No entities detected._"
 

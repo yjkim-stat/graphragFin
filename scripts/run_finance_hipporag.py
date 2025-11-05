@@ -25,7 +25,8 @@ from graphrag.query.indexer_adapters import (
 )
 from graphrag.utils.api import get_embedding_store, reformat_context_data
 
-from scripts.run_finance_graphrag import (
+# from scripts.run_finance_graphrag import (
+from script_utils.utils_run import (
     _build_config,
     _compute_cost,
     _ensure_workspace,
@@ -34,7 +35,14 @@ from scripts.run_finance_graphrag import (
     _load_parquet,
     _setup_logger,
 )
-from scripts import run_finance_indexing_evaluation as eval_utils
+from script_utils.utils_eval import (
+    _load_finance_documents,
+    _evaluate_entities,
+    _evaluate_relationships,
+    _entity_identifier_sets,
+    _entities_by_document,
+    _evaluate_ner
+)
 
 LOGGER_NAME = "finance_hipporag"
 logger = logging.getLogger(LOGGER_NAME)
@@ -62,7 +70,7 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         documents,
         dataset_summary,
         ground_truth_entities,
-    ) = eval_utils._load_finance_documents(
+    ) = _load_finance_documents(
         dataset_name=args.dataset_name,
         split=args.split,
         max_documents=args.max_documents,
@@ -231,19 +239,19 @@ async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     if not isinstance(response_text, str):
         response_text = json.dumps(response_text, ensure_ascii=False)
 
-    entity_metrics = eval_utils._evaluate_entities(
+    entity_metrics = _evaluate_entities(
         artifacts["entities"], artifacts["relationships"]
     )
-    relationship_metrics = eval_utils._evaluate_relationships(
+    relationship_metrics = _evaluate_relationships(
         artifacts["relationships"],
-        eval_utils._entity_identifier_sets(artifacts["entities"])
+        _entity_identifier_sets(artifacts["entities"])
         if artifacts["entities"] is not None
         else {},
     )
-    predicted_entities = eval_utils._entities_by_document(
+    predicted_entities = _entities_by_document(
         artifacts["entities"], artifacts["text_units"]
     )
-    ner_metrics = eval_utils._evaluate_ner(ground_truth_entities, predicted_entities)
+    ner_metrics = _evaluate_ner(ground_truth_entities, predicted_entities)
     entity_metrics["ground_truth_comparison"] = ner_metrics
 
     evaluation_summary = {

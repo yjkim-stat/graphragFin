@@ -162,6 +162,41 @@ LEXICONS.update({
     ],
 })
 
+# --- [NEW] Pre-cleaners (place near Utilities) ---
+
+HTML_GARBAGE_RE = re.compile(r"(?i)\b(?:ul><li|amp|nbsp|&amp;|&nbsp;)\b")
+# Common news dateline heads: "NEW DELHI:", "LONDON, Oct 12 (Reuters) -", etc.
+DATELINE_RE = re.compile(
+    r"""(?ix)
+    ^\s*
+    (?:[A-Z][A-Z]+(?:\s+[A-Z][A-Z]+){0,3})      # ALL-CAPS city/country up to 4 tokens (e.g., NEW DELHI)
+    (?:,\s*[A-Z][a-z]{2,9}\.?\s+\d{1,2})?       # optional: Month Day (e.g., Oct. 12)
+    (?:\s*\(Reuters\))?                         # optional: (Reuters)
+    \s*[:\-–]\s*
+    """
+)
+# Strip bracketed newsroom boilerplate
+BRACKETED_TAG_RE = re.compile(r"\[[^\]]{0,30}\bchar\b[^\]]{0,30}\]|\[[^\]]{1,40}\]", re.IGNORECASE)
+
+# Single-letter and garbage tokens you saw in counts
+SURFACE_NOISE = {
+    "char","[ char","ul><li","amp","t","what'","article","Author","Price","Spot",
+    "NEW","REUTERS","UPDATE"
+}
+
+def preclean_text(s: str) -> str:
+    if not isinstance(s, str) or not s:
+        return s
+    x = s.strip()
+    # Kill dateline at head once
+    x = DATELINE_RE.sub("", x)
+    # Remove bracketed boilerplates & HTML crumbs
+    x = HTML_GARBAGE_RE.sub(" ", x)
+    x = BRACKETED_TAG_RE.sub(" ", x)
+    # Normalize multiple spaces
+    x = re.sub(r"\s{2,}", " ", x)
+    return x
+
 
 # ---------------------------
 # Regex (tight & news-tuned)
@@ -320,15 +355,18 @@ def enrich_entities_with_finance(text: str) -> Dict[str, List[str]]:
     """
     Return dict of high-signal finance/news entities with noise suppressed.
     """
+    text = preclean_text(text)
+
     result = find_lexicon_mentions(text)
 
     stock_tickers = find_tickers(text)
     commodity_codes = find_commodity_codes(text)
-    money = find_money_with_units(text)
-    perc = find_percentages(text)
-    periods = find_periods(text)
+    # money = find_money_with_units(text)
+    # perc = find_percentages(text)
+    # periods = find_periods(text)
 
-    protected = set(stock_tickers) | set(commodity_codes) | set(perc) | set(money)
+    # protected = set(stock_tickers) | set(commodity_codes) | set(perc) | set(money)
+    protected = set(stock_tickers) | set(commodity_codes)
     for k, vals in result.items():
         result[k] = _denoise_entities(vals, protected=list(protected))
 
@@ -336,5 +374,5 @@ def enrich_entities_with_finance(text: str) -> Dict[str, List[str]]:
     result["commodity_codes"] = commodity_codes
     # result["money_with_units"] = money
     # result["percents"] = perc
-    result["periods_found"] = periods
+    # result["periods_found"] = periods
     return result

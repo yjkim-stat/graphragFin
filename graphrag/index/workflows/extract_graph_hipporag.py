@@ -163,7 +163,8 @@ def _build_hipporag_config(
 
     base_kwargs: dict[str, Any] = {
         "save_dir": save_dir,
-        "llm_model_name": llm_name,
+        # "llm_model_name": llm_name,
+        "llm_name": llm_name,        
         "embedding_model_name": embedding_name,
         "temperature": temperature,
         "max_new_tokens": max_tokens,
