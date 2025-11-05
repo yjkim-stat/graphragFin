@@ -95,3 +95,18 @@ PipelineFactory.register_pipeline(
     IndexingMethod.FastUpdate,
     ["load_update_documents", *_fast_workflows, *_update_workflows],
 )
+PipelineFactory.register_pipeline(
+    IndexingMethod.Hippo,
+    [
+        "load_input_documents",
+        "create_base_text_units",
+        "create_final_documents",
+        "extract_graph_hipporag",
+        "finalize_graph",
+        "extract_covariates",
+        "create_communities",
+        "create_final_text_units",
+        "create_community_reports",
+        "generate_text_embeddings",
+    ],
+)

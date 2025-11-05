@@ -153,6 +153,8 @@ class IndexingMethod(str, Enum):
     """Incremental update with standard indexing."""
     FastUpdate = "fast-update"
     """Incremental update with fast indexing."""
+    Hippo = "hippo"
+    """Indexing backed by the HippoRAG graph construction pipeline."""
 
 
 class NounPhraseExtractorType(str, Enum):
