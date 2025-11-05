@@ -22,7 +22,11 @@ def _run_indexing_evaluation(args: argparse.Namespace) -> dict[str, Any]:
 
     root_dir = args.workspace_dir.resolve()
     async_runner._ensure_workspace(root_dir)
-    run_logger = async_runner._setup_logger(root_dir / "logs")
+    run_logger = async_runner._setup_logger(
+        logging.getLogger(async_runner.LOGGER_NAME),
+        root_dir / "logs",
+        "run_finance_indexing_evaluation.log",
+    )
     run_logger.info(
         "Starting finance GraphRAG indexing evaluation",
         extra={"dataset": args.dataset_name},

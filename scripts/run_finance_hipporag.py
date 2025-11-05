@@ -51,7 +51,11 @@ logger = logging.getLogger(LOGGER_NAME)
 async def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     root_dir = args.workspace_dir.resolve()
     _ensure_workspace(root_dir)
-    run_logger = _setup_logger(root_dir / "logs")
+    run_logger = _setup_logger(
+        logging.getLogger(LOGGER_NAME),
+        root_dir / "logs",
+        "run_finance_hipporag.log",
+    )
     run_logger.info(
         "Starting finance HippoRAG pipeline", extra={"dataset": args.dataset_name}
     )
