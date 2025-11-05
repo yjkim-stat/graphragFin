@@ -30,6 +30,9 @@ from .extract_covariates import (
 from .extract_graph import (
     run_workflow as run_extract_graph,
 )
+from .extract_graph_hipporag import (
+    run_workflow as run_extract_graph_hipporag,
+)
 from .extract_graph_nlp import (
     run_workflow as run_extract_graph_nlp,
 )
@@ -86,6 +89,7 @@ PipelineFactory.register_all({
     "create_final_text_units": run_create_final_text_units,
     "extract_graph_nlp": run_extract_graph_nlp,
     "extract_graph": run_extract_graph,
+    "extract_graph_hipporag": run_extract_graph_hipporag,
     "finalize_graph": run_finalize_graph,
     "generate_text_embeddings": run_generate_text_embeddings,
     "prune_graph": run_prune_graph,
