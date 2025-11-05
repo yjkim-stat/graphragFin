@@ -1,76 +1,56 @@
-# GraphRAG
+# GRAGFin
 
-👉 [Microsoft Research Blog Post](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/)<br/>
-👉 [Read the docs](https://microsoft.github.io/graphrag)<br/>
-👉 [GraphRAG Arxiv](https://arxiv.org/pdf/2404.16130)
+GRAGFin is an extended version of Microsoft Research's GraphRAG tailored for financial-knowledge discovery and retrieval-augmented generation. Building on the original GraphRAG pipeline, GRAGFin introduces additional workflows, model integrations, and evaluation tools that make it easier to work with open-source large language models and to assess the quality of generated knowledge graphs.
 
-<div align="left">
-  <a href="https://pypi.org/project/graphrag/">
-    <img alt="PyPI - Version" src="https://img.shields.io/pypi/v/graphrag">
-  </a>
-  <a href="https://pypi.org/project/graphrag/">
-    <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/graphrag">
-  </a>
-  <a href="https://github.com/microsoft/graphrag/issues">
-    <img alt="GitHub Issues" src="https://img.shields.io/github/issues/microsoft/graphrag">
-  </a>
-  <a href="https://github.com/microsoft/graphrag/discussions">
-    <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/microsoft/graphrag">
-  </a>
-</div>
+## Key Features
 
-## Overview
-
-The GraphRAG project is a data pipeline and transformation suite that is designed to extract meaningful, structured data from unstructured text using the power of LLMs.
-
-To learn more about GraphRAG and how it can be used to enhance your LLM's ability to reason about your private data, please visit the <a href="https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/" target="_blank">Microsoft Research Blog Post.</a>
+- **Hugging Face language model provider** – Seamlessly run GraphRAG-style pipelines with open-source LLMs via the provider interfaces under `graphrag/language_model/providers/huggingface`.
+- **Dual GraphRAG and HippoRAG workflows** – Execute either GraphRAG or HippoRAG style retrieval flows through the components in the `hipporag` package.
+- **Rule-based knowledge graph annotation** – Evaluate and enrich knowledge graph indexing with the rule-based annotators in `indexing_utils/annotate-v2.py`, supporting lexicon priors, tokenization, and POS-tagging driven variants.
 
 ## Quickstart
 
-To get started with the GraphRAG system we recommend trying the [command line quickstart](https://microsoft.github.io/graphrag/get_started/).
+The `scripts/` directory contains end-to-end shell scripts that demonstrate the recommended way to run GRAGFin:
 
-## Repository Guidance
+- `scripts/run_finance_graphrag.sh` – Complete workflow from indexing through querying.
+- `scripts/run_finance_indexing_evaluation.sh` – Run only the indexing pipeline and knowledge-graph evaluation.
 
-This repository presents a methodology for using knowledge graph memory structures to enhance LLM outputs. Please note that the provided code serves as a demonstration and is not an officially supported Microsoft offering.
+Review each script for required environment variables and configuration paths before execution, then run them from the repository root, for example:
 
-⚠️ *Warning: GraphRAG indexing can be an expensive operation, please read all of the documentation to understand the process and costs involved, and start small.*
+```bash
+bash scripts/run_finance_graphrag.sh
+```
 
-## Diving Deeper
+## Documentation and Community Resources
 
-- To learn about our contribution guidelines, see [CONTRIBUTING.md](./CONTRIBUTING.md)
-- To start developing _GraphRAG_, see [DEVELOPING.md](./DEVELOPING.md)
-- Join the conversation and provide feedback in the [GitHub Discussions tab!](https://github.com/microsoft/graphrag/discussions)
+- [GraphRAG documentation](https://microsoft.github.io/graphrag) – Core concepts that remain applicable to GRAGFin.
+- [Microsoft Research blog post](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/) – Overview of the original GraphRAG project.
 
-## Prompt Tuning
+Please consult `DEVELOPING.md`, `CONTRIBUTING.md`, and `RAI_TRANSPARENCY.md` for development guidance, contribution instructions, and responsible AI considerations.
 
-Using _GraphRAG_ with your data out of the box may not yield the best possible results.
-We strongly recommend to fine-tune your prompts following the [Prompt Tuning Guide](https://microsoft.github.io/graphrag/prompt_tuning/overview/) in our documentation.
+## Source Projects
 
-## Versioning
+GRAGFin incorporates code from the following upstream repositories:
 
-Please see the [breaking changes](./breaking-changes.md) document for notes on our approach to versioning the project.
+- GraphRAG – <https://github.com/microsoft/graphrag>
+- HippoRAG – <https://github.com/OSU-NLP-Group/HippoRAG>
 
-*Always run `graphrag init --root [path] --force` between minor version bumps to ensure you have the latest config format. Run the provided migration notebook between major version bumps if you want to avoid re-indexing prior datasets. Note that this will overwrite your configuration and prompts, so backup if necessary.*
+## Citation
 
-## Responsible AI FAQ
+If you use GRAGFin in academic work or software, please cite both upstream projects in addition to this repository:
 
-See [RAI_TRANSPARENCY.md](./RAI_TRANSPARENCY.md)
+```
+@software{graphrag,
+  author  = {Dwivedi, Karan and team},
+  title   = {GraphRAG},
+  year    = {2024},
+  url     = {https://github.com/microsoft/graphrag}
+}
 
-- [What is GraphRAG?](./RAI_TRANSPARENCY.md#what-is-graphrag)
-- [What can GraphRAG do?](./RAI_TRANSPARENCY.md#what-can-graphrag-do)
-- [What are GraphRAG’s intended use(s)?](./RAI_TRANSPARENCY.md#what-are-graphrags-intended-uses)
-- [How was GraphRAG evaluated? What metrics are used to measure performance?](./RAI_TRANSPARENCY.md#how-was-graphrag-evaluated-what-metrics-are-used-to-measure-performance)
-- [What are the limitations of GraphRAG? How can users minimize the impact of GraphRAG’s limitations when using the system?](./RAI_TRANSPARENCY.md#what-are-the-limitations-of-graphrag-how-can-users-minimize-the-impact-of-graphrags-limitations-when-using-the-system)
-- [What operational factors and settings allow for effective and responsible use of GraphRAG?](./RAI_TRANSPARENCY.md#what-operational-factors-and-settings-allow-for-effective-and-responsible-use-of-graphrag)
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
-trademarks or logos is subject to and must follow
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
-
-## Privacy
-
-[Microsoft Privacy Statement](https://privacy.microsoft.com/en-us/privacystatement)
+@software{hipporag,
+  author  = {Yu, Dian and team},
+  title   = {HippoRAG},
+  year    = {2024},
+  url     = {https://github.com/OSU-NLP-Group/HippoRAG}
+}
+```
