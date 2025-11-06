@@ -98,7 +98,7 @@ class HuggingFaceChatModel:
         }
         self._model = AutoModelForCausalLM.from_pretrained(
             model, 
-            dtype=torch.float16, 
+            # dtype=torch.float16, 
             trust_remote_code=True, 
             quantization_config=BitsAndBytesConfig(**quantization_config), 
             # cache_dir=os.getenv('CACHE_DIR'),

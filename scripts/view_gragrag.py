@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import pandas as pd
+import numpy as np
 from pathlib import Path
 from typing import Any, Iterable, Optional
+import json, math
+from collections import defaultdict, deque
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +30,13 @@ def _load_json(path: Path) -> Any:
         raise ValueError(msg) from exc
 
 
+def _load_parquet(path: Path) -> Any:
+    if not path.exists():
+        logger.warning("Skipping missing export: %s", path)
+        return None
+
+    return pd.read_parquet(path)
+
 def _stringify(value: Any) -> str:
     """Convert arbitrary values into readable strings for markdown tables."""
 
@@ -37,6 +49,43 @@ def _stringify(value: Any) -> str:
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
     return str(value)
+
+######################################################################
+# Json utils
+######################################################################
+
+def _json_safe(obj):
+    """파이썬 기본형/리스트/딕트/None/문자열만 남도록 재귀 변환"""
+    # NumPy 스칼라
+    if isinstance(obj, np.generic):
+        return obj.item()
+    # NumPy 배열
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    # pandas 시계열
+    if isinstance(obj, (pd.Timestamp, pd.NaT.__class__)):
+        return None if pd.isna(obj) else obj.isoformat()
+    # pandas Timedelta
+    if isinstance(obj, pd.Timedelta):
+        return None if pd.isna(obj) else obj.isoformat()
+    # pandas NA/NaN
+    if obj is pd.NA or (isinstance(obj, float) and np.isnan(obj)):
+        return None
+    # dict/list/tuple 재귀 처리
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj  # 파이썬 기본형 등
+
+
+def _df_json_safe(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    # 자주 문제되는 컬럼들: ndarray -> list
+    for col in df.columns:
+        if df[col].dtype == "object":
+            df[col] = df[col].apply(lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
+    return df
 
 
 def _truncate_text(value: Any, limit: int) -> Any:
@@ -317,6 +366,391 @@ def _render_graph_image(graph_exports: dict[str, Any] | None, image_path: Path) 
     return True
 
 
+
+def generate_graph_markdown_with_nhops(
+    entities, relationships,
+    max_hops=2,
+    start_ids=None,                 # 예: ["ent_1", "ent_7"]; None이면 모든 엔티티를 시작점으로
+    max_paths_per_source=50,        # 시작 노드당 n-hop 경로 최대 개수
+    bidirectional=False,            # True면 target->source도 탐색에 포함(무향처럼)
+):
+    # --- 엔티티 사전 ---
+    id2title = {}
+    id2desc  = {}
+    for _, row in entities.iterrows():
+        _id = str(row["id"])
+        id2title[_id] = str(row.get("title", _id))
+        id2desc[_id]  = str(row.get("description", "")) if row.get("description", "") is not None else ""
+
+    # --- 엣지/인접 리스트 ---
+    # edge_map[(u,v)] = {"description": ..., "weight": ...}
+    edge_map = {}
+    adj = defaultdict(list)
+    for _, r in relationships.iterrows():
+        u = str(r["source"]); v = str(r["target"])
+        desc = str(r.get("description", "")) if r.get("description", "") is not None else ""
+        w = r.get("weight", None)
+        edge_map[(u, v)] = {"description": desc, "weight": w}
+        adj[u].append(v)
+        if bidirectional:
+            edge_map[(v, u)] = {"description": desc, "weight": w}
+            adj[v].append(u)
+
+    # --- 시작점 결정 ---
+    if start_ids is None:
+        starts = [str(x) for x in entities["id"].tolist()]
+    else:
+        starts = [str(x) for x in start_ids if str(x) in id2title]
+
+    lines = []
+    lines.append("# Text–Relationship–Text Graph Summary\n")
+
+    # 1) 1-hop 요약(직접 연결)
+    lines.append("## 1-hop Relationships\n")
+    for _, r in relationships.iterrows():
+        u = str(r["source"]); v = str(r["target"])
+        rel_desc = str(r.get("description", "")) if r.get("description", "") is not None else ""
+        u_t = id2title.get(u, u); v_t = id2title.get(v, v)
+        u_d = id2desc.get(u, ""); v_d = id2desc.get(v, "")
+        lines.append(f"### {u_t} → {v_t}")
+        lines.append(f"**Relationship:** {rel_desc}")
+        if u_d: lines.append(f"- **{u_t} 설명:** {u_d}")
+        if v_d: lines.append(f"- **{v_t} 설명:** {v_d}")
+        lines.append("---")
+
+    # 2) n-hop 경로
+    if max_hops >= 2:
+        lines.append(f"\n## n-hop Paths (up to {max_hops} hops)\n")
+        for s in starts:
+            s_title = id2title.get(s, s)
+            lines.append(f"### Start: {s_title} (`{s}`)")
+            found = 0
+
+            # BFS로 simple paths 생성 (사이클 방지)
+            # 큐 원소: (path_nodes, path_edges)
+            #   path_nodes: [u, ..., v]
+            #   path_edges: [(u,u1), (u1,u2), ...]
+            q = deque()
+            q.append(([s], []))
+
+            # 시작점의 1-hop부터 확장
+            while q and found < max_paths_per_source:
+                nodes_path, edges_path = q.popleft()
+                last = nodes_path[-1]
+
+                # 현재 경로 길이가 hop 수로 이미 max면 더 확장 불가
+                if len(edges_path) >= max_hops:
+                    continue
+
+                for nxt in adj.get(last, []):
+                    if nxt in nodes_path:  # simple path 보장
+                        continue
+                    new_nodes = nodes_path + [nxt]
+                    new_edges = edges_path + [(last, nxt)]
+
+                    # 경로 2개 이상의 노드가 되면 하나의 유효 path로 기록
+                    if len(new_edges) >= 1:
+                        # 마크다운 한 줄로 경로 표현
+                        segs = []
+                        for (a, b) in new_edges:
+                            ad = edge_map.get((a, b), {}).get("description", "")
+                            a_t = id2title.get(a, a)
+                            b_t = id2title.get(b, b)
+                            segs.append(f"{a_t} --({ad})--> {b_t}")
+                        lines.append(f"- " + " -- ".join(segs))
+                        found += 1
+                        if found >= max_paths_per_source:
+                            break
+
+                    # 더 확장 가능하면 큐에 넣기
+                    q.append((new_nodes, new_edges))
+
+            if found == 0:
+                lines.append("- (no paths)")
+            lines.append("")  # 빈 줄
+
+    return "\n".join(lines)
+
+
+
+def generate_relationship_markdown(entities, relationships):
+    # id → (title, description) 매핑 사전
+    entity_info = {
+        row["id"]: (row["title"], row.get("description", ""))
+        for _, row in entities.iterrows()
+    }
+
+    lines = []
+    lines.append("# Text–Relationship–Text Graph Summary\n")
+
+    for _, rel in relationships.iterrows():
+        src = rel["source"]
+        tgt = rel["target"]
+        rel_desc = rel.get("description", "")
+
+        # 노드 정보 가져오기
+        src_title, src_desc = entity_info.get(src, (src, ""))
+        tgt_title, tgt_desc = entity_info.get(tgt, (tgt, ""))
+
+        lines.append(f"## {src_title} → {tgt_title}")
+        lines.append("")
+        lines.append(f"**Relationship:** {rel_desc}")
+        lines.append("")
+        if src_desc:
+            lines.append(f"- **{src_title} 설명:** {src_desc}")
+        if tgt_desc:
+            lines.append(f"- **{tgt_title} 설명:** {tgt_desc}")
+        lines.append("\n---\n")
+
+    return "\n".join(lines)
+
+
+
+def save_graph_html(
+    nodes_df, edges_df, out_path="graph.html",
+    node_id_col="id",      # 노드 고유 ID 컬럼 (예: "id")
+    node_label_col="title",# 노드 라벨로 보여줄 컬럼 (예: "title")
+    node_group_col=None,   # 노드 색상 그룹핑용 컬럼 (없으면 자동)
+    edge_source_col="source",
+    edge_target_col="target",
+    edge_weight_col="weight",   # 엣지 가중치(없어도 동작)
+    edge_desc_col="description" # 엣지 설명(툴팁)
+):
+    nodes = nodes_df.copy()
+    edges = edges_df.copy()
+
+    # 기본 컬럼 존재 보정
+    for col in [node_id_col]:
+        if col not in nodes.columns:
+            raise ValueError(f"nodes_df에 '{col}' 컬럼이 없습니다.")
+    for col in [edge_source_col, edge_target_col]:
+        if col not in edges.columns:
+            raise ValueError(f"edges_df에 '{col}' 컬럼이 없습니다.")
+
+    # 라벨/그룹 기본값
+    if node_label_col not in nodes.columns:
+        node_label_col = node_id_col
+    if node_group_col and node_group_col not in nodes.columns:
+        node_group_col = None
+
+    # 엣지 부가정보 컬럼 유무 체크
+    has_weight = edge_weight_col in edges.columns
+    has_desc = edge_desc_col in edges.columns
+
+    # 레코드로 변환
+    node_records = nodes.to_dict(orient="records")
+    edge_records = edges.to_dict(orient="records")
+
+    # D3에서 쓸 형태로 필드 정리
+    id_set = set()
+    for n in node_records:
+        n["_id"] = str(n.get(node_id_col))
+        id_set.add(n["_id"])
+        n["_label"] = str(n.get(node_label_col, n["_id"]))
+        n["_group"] = str(n.get(node_group_col, "default")) if node_group_col else "default"
+
+    cleaned_links = []
+    for e in edge_records:
+        s = str(e.get(edge_source_col))
+        t = str(e.get(edge_target_col))
+        if s in id_set and t in id_set:
+            e["_source"] = s
+            e["_target"] = t
+            e["_weight"] = float(e.get(edge_weight_col, 1.0)) if has_weight else 1.0
+            e["_desc"] = str(e.get(edge_desc_col, "")) if has_desc else ""
+            cleaned_links.append(e)
+
+    data = {
+        "nodes": node_records,
+        "links": cleaned_links,
+        "fieldMap": {
+            "nodeId": node_id_col,
+            "nodeLabel": node_label_col,
+            "nodeGroup": node_group_col,
+            "edgeSource": edge_source_col,
+            "edgeTarget": edge_target_col,
+            "edgeWeight": edge_weight_col if has_weight else None,
+            "edgeDesc": edge_desc_col if has_desc else None,
+        }
+    }
+
+    safe_data = _json_safe(data)
+
+    # HTML 템플릿 (D3 v7, 확대/이동, 검색, 라벨 토글, 가중치에 따른 링크 굵기/길이)
+    html = f"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Network Graph</title>
+<style>
+  body {{ margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }}
+  header {{ padding: 10px 14px; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff; z-index: 2; }}
+  .controls {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
+  .controls input[type="text"] {{ padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; min-width: 240px; }}
+  .controls label {{ display: inline-flex; gap: 6px; align-items: center; }}
+  #graph {{ width: 100vw; height: calc(100vh - 56px); }}
+  .node circle {{ stroke: #333; stroke-width: 0.5px; }}
+  .node text {{ font-size: 11px; pointer-events: none; opacity: 0.9; }}
+  .link {{ stroke: #999; stroke-opacity: 0.6; }}
+  .highlight circle {{ stroke: #000; stroke-width: 2px; }}
+  .tooltip {{
+    position: absolute; pointer-events: none; background: rgba(0,0,0,0.78); color: #fff;
+    padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.25; z-index: 3;
+  }}
+</style>
+</head>
+<body>
+<header>
+  <div class="controls">
+    <input id="search" type="text" placeholder="노드 검색 (id / 라벨)"/>
+    <label><input id="toggle-labels" type="checkbox" checked/> 라벨 표시</label>
+    <label>링크 길이 <input id="linkDist" type="range" min="40" max="240" value="120"/></label>
+    <label>링크 강도 <input id="linkStr" type="range" min="10" max="100" value="50"/></label>
+    <span id="stats"></span>
+  </div>
+</header>
+<div id="graph"></div>
+
+<script id="graph-data" type="application/json">{json.dumps(safe_data, ensure_ascii=False)}</script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+(() => {{
+  const cfg = JSON.parse(document.getElementById("graph-data").textContent);
+  const nodes = cfg.nodes;
+  const links = cfg.links;
+
+  // 색상 스케일 (그룹마다)
+  const groups = [...new Set(nodes.map(d => d._group))];
+  const color = d3.scaleOrdinal().domain(groups).range(d3.schemeTableau10);
+
+  // 통계
+  document.getElementById("stats").textContent = `노드: ${{nodes.length}} · 엣지: ${{links.length}} · 그룹: ${{groups.length}}`;
+
+  const container = document.getElementById("graph");
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  const svg = d3.select("#graph").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  const g = svg.append("g");
+
+  const zoom = d3.zoom().scaleExtent([0.1, 5]).on("zoom", (event) => {{
+    g.attr("transform", event.transform);
+  }});
+  svg.call(zoom);
+
+  // 링크와 노드
+  const link = g.append("g")
+      .attr("stroke-linecap", "round")
+    .selectAll("line")
+    .data(links)
+    .join("line")
+      .attr("class", "link")
+      .attr("stroke-width", d => 0.5 + Math.sqrt(d._weight || 1));
+
+  const node = g.append("g")
+    .selectAll("g")
+    .data(nodes)
+    .join("g")
+      .attr("class", "node")
+      .call(drag(simulation));
+
+  node.append("circle")
+      .attr("r", 6)
+      .attr("fill", d => color(d._group || "default"));
+
+  const labels = node.append("text")
+      .attr("x", 9)
+      .attr("y", 3)
+      .text(d => d._label);
+
+  // 툴팁
+  const tooltip = d3.select("body").append("div").attr("class", "tooltip").style("opacity", 0);
+
+  node.on("mouseover", (event, d) => {{
+    tooltip.style("opacity", 1)
+      .html(`<b>${{d._label}}</b><br/><small>id: ${{d._id}} | group: ${{d._group}}</small>`);
+  }}).on("mousemove", (event) => {{
+    tooltip.style("left", (event.pageX + 10) + "px")
+           .style("top", (event.pageY + 10) + "px");
+  }}).on("mouseout", () => tooltip.style("opacity", 0));
+
+  link.on("mouseover", (event, d) => {{
+    const desc = d._desc ? `<br/>${{d._desc}}` : "";
+    tooltip.style("opacity", 1)
+      .html(`🔗 <b>${{d._source}}</b> → <b>${{d._target}}</b><br/>w=${{d._weight}}${{desc}}`);
+  }}).on("mousemove", (event) => {{
+    tooltip.style("left", (event.pageX + 10) + "px")
+           .style("top", (event.pageY + 10) + "px");
+  }}).on("mouseout", () => tooltip.style("opacity", 0));
+
+  // 시뮬레이션
+  const linkDistInput = document.getElementById("linkDist");
+  const linkStrInput = document.getElementById("linkStr");
+
+  const simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links)
+      .id(d => d._id)
+      .distance(d => (+linkDistInput.value) / Math.sqrt(d._weight || 1))
+      .strength(() => (+linkStrInput.value)/100))
+    .force("charge", d3.forceManyBody().strength(-80))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collision", d3.forceCollide().radius(16));
+
+  simulation.on("tick", () => {{
+    link
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
+
+    node.attr("transform", d => `translate(${{d.x}}, ${{d.y}})`);
+  }});
+
+  linkDistInput.addEventListener("input", () => simulation.alpha(0.5).restart());
+  linkStrInput.addEventListener("input", () => simulation.alpha(0.5).restart());
+
+  // 라벨 토글
+  const toggle = document.getElementById("toggle-labels");
+  const updateLabelsVisibility = () => labels.style("display", toggle.checked ? null : "none");
+  toggle.addEventListener("change", updateLabelsVisibility);
+  updateLabelsVisibility();
+
+  // 드래그
+  function drag(sim) {{
+    function dragstarted(event, d) {{
+      if (!event.active) sim.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    }}
+    function dragged(event, d) {{
+      d.fx = event.x; d.fy = event.y;
+    }}
+    function dragended(event, d) {{
+      if (!event.active) sim.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    }}
+    return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+  }}
+
+  // 검색/하이라이트
+  const search = document.getElementById("search");
+  search.addEventListener("input", () => {{
+    const q = search.value.trim().toLowerCase();
+    node.classed("highlight", d =>
+      !q ? false : (d._id.toLowerCase().includes(q) || (d._label||"").toLowerCase().includes(q))
+    );
+  }});
+}})();
+</script>
+</body>
+</html>
+"""
+    Path(out_path).write_text(html, encoding="utf-8")
+    print(f"Saved: {Path(out_path).resolve()}")
+
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -324,6 +758,31 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=Path,
         required=True,
         help="Workspace directory containing an exports/ folder produced by run_finance_graphrag-v2.py.",
+    )
+    parser.add_argument(
+        "--community-path",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--document-path",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--entity-path",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--relationship-path",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--textunit-path",
+        type=Path,
+        default=None,
     )
     parser.add_argument(
         "--markdown-path",
@@ -362,36 +821,93 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))
 
     workspace_dir = args.workspace_dir.resolve()
-    exports_dir = workspace_dir / "exports"
-    if not exports_dir.exists():
+    output_dir = workspace_dir / "output"
+    if not output_dir.exists():
         raise FileNotFoundError(
-            f"Workspace exports directory not found: {exports_dir}. "
+            f"Workspace output directory not found: {output_dir}. "
             "Run run_finance_graphrag-v2.py before rendering the view."
         )
 
-    markdown_path = args.markdown_path or (exports_dir / "graphrag_summary.md")
-    image_path = args.graph_image_path or (exports_dir / "graphrag_graph.png")
+    community_path = args.community_path or (output_dir / "comunities.parquet")
+    document_path = args.document_path or (output_dir / "documents.parquet")
+    entity_path = args.entity_path or (output_dir / "entities.parquet")
+    relationship_path = args.relationship_path or (output_dir / "relationships.parquet")
+    textunit_path = args.textunit_path or (output_dir / "test_units.parquet")
 
-    local_search_exports = _load_json(exports_dir / "local_search_output.json")
-    community_exports = _load_json(exports_dir / "community_summaries.json")
-    graph_exports = _load_json(exports_dir / "graph_data.json")
+    markdown_path = args.markdown_path or (output_dir / "graphrag_summary.md")
+    image_path = args.graph_image_path or (output_dir / "graphrag_graph.png")
 
-    markdown = _build_markdown(
-        local_search_exports,
-        community_exports,
-        graph_exports,
-        max_rows=max(args.max_rows, 1),
-        text_limit=max(args.text_limit, 0),
+    communities = _load_parquet(community_path)
+    documents = _load_parquet(document_path)
+    entities = _load_parquet(entity_path)
+    relationships = _load_parquet(relationship_path)
+    test_units = _load_parquet(textunit_path)
+
+    print('='*50)
+    print(f'\t communities')
+    # print(communities.info())
+    print('='*50)
+    print(f'\t documents')
+    print(documents.info())
+    print('='*50)
+    print(f'\t entities')
+    print(entities.info())
+    print('='*50)
+    print(f'\t relationships')
+    print(relationships.info())
+    print('='*50)
+    print(f'\t test_units')
+    # print(test_units.info())
+    print('='*50)
+
+
+    # Output 1 : HTML for graph visualization
+
+    save_graph_html(entities, relationships, out_path= output_dir / "view-graph.html")
+
+    # 실제 실행
+    # markdown_output = generate_relationship_markdown(entities, relationships)
+    # (output_dir / "view-graph.md").write_text(markdown_output, encoding='utf-8')
+    markdown_output_nhop = generate_graph_markdown_with_nhops(
+        entities, relationships,
+        max_hops=3,                       # 최대 3-hop
+        start_ids=None,                   # 모든 엔티티를 시작점으로
+        max_paths_per_source=30,          # 시작점당 30개 경로 제한
+        bidirectional=False               # True면 무향처럼 확장
     )
+    (output_dir / "view-graph-nhops.md").write_text(markdown_output_nhop, encoding='utf-8')
 
-    markdown_path.parent.mkdir(parents=True, exist_ok=True)
-    markdown_path.write_text(markdown, encoding="utf-8")
-    logger.info("Saved markdown summary to %s", markdown_path)
+    # save_graph_html(nodes_df, edges_df,
+    #                 node_id_col="id", node_label_col="title",
+    #                 edge_source_col="source", edge_target_col="target",
+    #                 edge_weight_col="weight", edge_desc_col="description",
+    #                 out_path="graph.html")
 
-    if _render_graph_image(graph_exports, image_path):
-        logger.info("Graph image generated at %s", image_path)
-    else:
-        logger.info("Graph image skipped (insufficient data or optional dependencies missing).")
+
+
+
+
+    # Using documents and entit
+    # local_search_exports = _load_json(output_dir / "local_search_output.json")
+    # community_exports = _load_json(output_dir / "community_summaries.json")
+    # graph_exports = _load_json(output_dir / "graph_data.json")
+
+    # markdown = _build_markdown(
+    #     local_search_exports,
+    #     community_exports,
+    #     graph_exports,
+    #     max_rows=max(args.max_rows, 1),
+    #     text_limit=max(args.text_limit, 0),
+    # )
+
+    # markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    # markdown_path.write_text(markdown, encoding="utf-8")
+    # logger.info("Saved markdown summary to %s", markdown_path)
+
+    # if _render_graph_image(graph_exports, image_path):
+    #     logger.info("Graph image generated at %s", image_path)
+    # else:
+    #     logger.info("Graph image skipped (insufficient data or optional dependencies missing).")
 
 
 if __name__ == "__main__":
