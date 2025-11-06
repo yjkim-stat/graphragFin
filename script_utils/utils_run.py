@@ -111,11 +111,12 @@ def _resolve_workflow_overrides(
     if not base_workflows:
         return None
 
-    skip_steps = {
-        "create_community_reports",
-        "create_community_reports_text",
-        "update_community_reports",
-    }
+    skip_steps = {}
+    # skip_steps = {
+    #     "create_community_reports",
+    #     "create_community_reports_text",
+    #     "update_community_reports",
+    # }
     filtered = [step for step in base_workflows if step not in skip_steps]
 
     if len(filtered) == len(base_workflows):
