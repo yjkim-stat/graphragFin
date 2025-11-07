@@ -8,6 +8,9 @@ from uuid import uuid4
 import pandas as pd
 
 from graphrag.data_model.schemas import COMMUNITY_REPORTS_FINAL_COLUMNS
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def finalize_community_reports(
@@ -16,6 +19,8 @@ def finalize_community_reports(
 ) -> pd.DataFrame:
     """All the steps to transform final community reports."""
     # Merge with communities to add shared fields
+    logger.info(f'finalize_community_reports')
+    logger.info(reports.info())
     community_reports = reports.merge(
         communities.loc[:, ["community", "parent", "children", "size", "period"]],
         on="community",

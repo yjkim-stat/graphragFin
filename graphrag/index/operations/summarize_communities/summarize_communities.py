@@ -45,6 +45,7 @@ async def summarize_communities(
     reports: list[CommunityReport | None] = []
     tick = progress_ticker(callbacks.progress, len(local_contexts))
     strategy_exec = load_strategy(strategy["type"])
+    logger.info(f'strategy_exec:{strategy_exec}')
     strategy_config = {**strategy}
     community_hierarchy = (
         communities.explode("children")
@@ -53,6 +54,7 @@ async def summarize_communities(
     ).dropna()
 
     levels = get_levels(nodes)
+    logger.info(f'levels:{levels}')
 
     level_contexts = []
     for level in levels:
@@ -65,6 +67,7 @@ async def summarize_communities(
             max_context_tokens=max_input_length,
         )
         level_contexts.append(level_context)
+    logger.info(f'level_contexts:{level_contexts}')
 
     for i, level_context in enumerate(level_contexts):
 
@@ -89,8 +92,9 @@ async def summarize_communities(
             async_type=async_mode,
             progress_msg=f"level {levels[i]} summarize communities progress: ",
         )
+        logger.info(f'local_reports:{local_reports}')
         reports.extend([lr for lr in local_reports if lr is not None])
-
+    logger.info(f'reports:{reports}')
     return pd.DataFrame(reports)
 
 

@@ -56,6 +56,9 @@ async def run_workflow(
         community_reports_llm_settings,
         domain_context=domain_context,
     )
+    logger.info(f'entities\n{entities}')
+    logger.info(f'communities\n{communities}')
+    logger.info(f'text_units\n{text_units}')
 
     output = await create_community_reports_text(
         entities,
@@ -113,5 +116,10 @@ async def create_community_reports_text(
         async_mode=async_mode,
         num_threads=num_threads,
     )
+
+    logger.info(f'nodes\n{nodes}')
+    logger.info(f'text_communitiesunits\n{communities}')
+    logger.info(f'local_contexts\n{local_contexts}')
+    logger.info(f'community_reports\n{community_reports}')
 
     return finalize_community_reports(community_reports, communities)

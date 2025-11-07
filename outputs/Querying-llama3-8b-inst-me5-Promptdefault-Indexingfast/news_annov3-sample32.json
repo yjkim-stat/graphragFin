@@ -1,0 +1,836 @@
+{
+  "query": "What factors cause increases and decreases in copper futures prices, and what key factors influence copper futures price movements overall?",
+  "dataset": {
+    "dataset": "/home/yjkim/gragfin-data/news_articles-annotated-2025-11-06_0929.csv",
+    "split": "train",
+    "document_count": 32,
+    "text_column": "all_text",
+    "title_column": "title",
+    "text_length": {
+      "min": 213,
+      "max": 214,
+      "mean": 213.375
+    }
+  },
+  "response": " \n\nASSUMPTIONS: \n- The user is familiar with the basics of futures trading.\n- The user is interested in understanding the key factors influencing copper futures price movements.\n\nRESPONSE:\n### Factors Influencing Copper Futures Price Movements\n\nCopper futures prices are influenced by a variety of factors, including:\n\n#### 1. Supply and Demand Dynamics\n\nCopper futures prices are often driven by changes in supply and demand dynamics. When demand for copper increases, prices tend to rise, and when supply increases, prices tend to fall. For example, a report from the Multi Commodity Exchange (MCE) indicates that copper prices rose 1.76% to Rs 605.70 per kg in futures trade on Monday on pick up in spot demand [Data: Sources (25)].\n\n#### 2. Economic Indicators\n\nEconomic indicators such as GDP growth, inflation rates, and interest rates can also impact copper futures prices. For instance, a report from HDFC Securities suggests that gold prices rose 877 to 50,619 per 10 gram in the national capital on January 4 in line with gains in global precious metal prices, which may indicate a positive economic outlook and increased demand for copper [Data: Sources (19)].\n\n#### 3. Global Events and Geopolitics\n\nGlobal events and geopolitics can also significantly impact copper futures prices. For example, a report from the National Commodity and Derivatives Exchange (NCDEX) indicates that crude oil prices rose Rs 91 to Rs 3,618 per barrel on Monday as participants widened their positions on firm spot demand, which may indicate increased demand for copper in the energy sector [Data: Sources (20)].\n\nThese are just a few of the key factors that influence copper futures price movements. Understanding these factors is essential for making informed investment decisions in the copper futures market. \n\nNote: The data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, 6, 25, 19, 20); Reports (4, 29); Entities (2, 14, 18, 23, 25)]  +more. \n\n### Additional Factors to Consider\n\nOther factors that may influence copper futures price movements include:\n\n* Changes in government policies and regulations\n* Weather events and natural disasters\n* Strikes and labor disputes\n* Technological advancements and innovations\n* Global trade agreements and tariffs\n\nThese factors can have a significant impact on copper futures prices and should be taken into account when making investment decisions. \n\n### Conclusion\n\nIn conclusion, copper futures prices are influenced by a variety of factors, including supply and demand dynamics, economic indicators, and global events and geopolitics. Understanding these factors is essential for making informed investment decisions in the copper futures market. By considering these factors and staying up-to-date with market news and trends, investors can make more informed decisions and achieve their investment goals. \n\nNote: The data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, 6, 25, 19, 20); Reports (4, 29); Entities (2, 14, 18, 23, 25)]  +more. \n\n### References\n\nFor further information on copper futures prices and market trends, please refer to the following sources:\n\n* Multi Commodity Exchange (MCE)\n* National Commodity and Derivatives Exchange (NCDEX)\n* HDFC Securities\n* National Commodity and Derivatives Exchange (NCDEX)\n\nNote: The data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, 6, 25, 19, 20); Reports (4, 29); Entities (2, 14, 18, 23, 25)]  +more. \n\n### Disclaimer\n\nThe information provided is for general information purposes only and should not be considered as investment advice. Investors should consult with a financial advisor or conduct their own research before making any investment decisions. \n\nNote: The data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, 6, 25, 19, 20); Reports (4, 29); Entities (2, 14, 18, 23, 25)]  +more. \n\n### Data References\n\nThe data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, 6, 25, 19, 20); Reports (4, 29); Entities (2, 14, 18, 23, 25)]  +more. \n\nPlease note that the data references provided are based on the input data tables and are subject to change as new data becomes available.  [Data: Sources (5, ",
+  "response_metrics": {
+    "prompt_tokens": 3316,
+    "completion_tokens": 1024,
+    "llm_calls": 1,
+    "completion_time_seconds": 30.344539165496826,
+    "context_character_count": 9192,
+    "response_character_count": 4529,
+    "estimated_cost": 0.0
+  },
+  "retrieved_context": {
+    "reports": [
+      {
+        "id": "4",
+        "title": "Silver and Gold Market",
+        "content": "# Silver and Gold Market\n\nThe community revolves around the silver and gold market, with multiple entities related to each other through their activities and trends in the market.\n\n## Silver prices rose significantly\n\nSilver prices rose by Rs 92 to Rs 68,197 per kg in futures trade on Friday as participants widened their bets on firm spot demand [Data: Sources (6, 23, 30); Entities (26.0)]. This suggests that the market is experiencing a surge in demand, which could lead to increased prices and potential economic impact. [Data: Sources (6, 23, 30); Entities (26.0)].\n\n## Gold prices also rose\n\nGold prices rose by Rs 64 to Rs 51,488 per 10 gram in the futures trade on Tuesday as speculators created fresh positions on a firm spot demand [Data: Sources (29, 24); Entities (23.0)]. This indicates that the gold market is also experiencing a rise in demand, which could have a positive impact on the economy. [Data: Sources (29, 24); Entities (23.0)].\n\n## Zinc and Copper prices also rose\n\nZinc prices rose by 50 paise to Rs 214.90 per kg in futures trade on Friday tracking a firm trend in physical markets on the back of a pick-up in spot demand [Data: Sources (4, 22); Entities (18.0)]. Copper prices rose 1.76 per cent to Rs 605.70 per kg in futures trade on Monday on pick up in spot demand [Data: Sources (25); Entities (18.0)]. This suggests that the zinc and copper markets are also experiencing a rise in demand, which could have a positive impact on the economy. [Data: Sources (4, 22, 25); Entities (18.0)].\n\n## Crude oil prices rose\n\nCrude oil prices rose by Rs 91 to Rs 3,618 per barrel on Monday as participants widened their positions on a firm spot demand [Data: Sources (20, 7); Entities (14.0)]. This indicates that the crude oil market is also experiencing a rise in demand, which could have a positive impact on the economy. [Data: Sources (20, 7); Entities (14.0)]."
+      }
+    ],
+    "entities": [
+      {
+        "id": "2",
+        "entity": "FUTURES TRADE",
+        "description": "",
+        "number of relationships": "9",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "10",
+        "entity": "DERIVATIVES",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "18",
+        "entity": "OIL PRICES",
+        "description": "",
+        "number of relationships": "4",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "23",
+        "entity": "PHYSICAL MARKETS",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "8",
+        "entity": "GOLD PRICES",
+        "description": "",
+        "number of relationships": "2",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "21",
+        "entity": "SILVER CONTRACTS",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "0",
+        "entity": "ALLOY MAKERS",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "20",
+        "entity": "GOLD CONTRACTS",
+        "description": "",
+        "number of relationships": "4",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "14",
+        "entity": "MULTI COMMODITY",
+        "description": "",
+        "number of relationships": "9",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "3",
+        "entity": "SPOT MARKET",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "11",
+        "entity": "SOYA OIL PRICES",
+        "description": "",
+        "number of relationships": "2",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "9",
+        "entity": "COMMODITY",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "16",
+        "entity": "CRUDE OIL",
+        "description": "",
+        "number of relationships": "2",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "13",
+        "entity": "JANUARY",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "22",
+        "entity": "FIRM TREND",
+        "description": "",
+        "number of relationships": "3",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "17",
+        "entity": "FIRM SPOT DEMAND",
+        "description": "",
+        "number of relationships": "5",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      },
+      {
+        "id": "12",
+        "entity": "SPOT DEMAND",
+        "description": "",
+        "number of relationships": "4",
+        "domain_profile": "",
+        "domain_tags": "",
+        "domain_primary_tag": "",
+        "in_context": true
+      }
+    ],
+    "relationships": [
+      {
+        "id": "9",
+        "source": "FUTURES TRADE",
+        "target": "MULTI COMMODITY",
+        "description": "",
+        "weight": "0.0529153112203938",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "8",
+        "source": "FIRM SPOT DEMAND",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": "0.030391762426141555",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "25",
+        "source": "FIRM SPOT DEMAND",
+        "target": "MULTI COMMODITY",
+        "description": "",
+        "weight": "0.06483035454539614",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "11",
+        "source": "FUTURES TRADE",
+        "target": "SPOT DEMAND",
+        "description": "",
+        "weight": "0.030679663411998376",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "20",
+        "source": "MULTI COMMODITY",
+        "target": "SPOT DEMAND",
+        "description": "",
+        "weight": "0.023702101603832203",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "27",
+        "source": "GOLD CONTRACTS",
+        "target": "MULTI COMMODITY",
+        "description": "",
+        "weight": "0.018522958441541757",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "28",
+        "source": "MULTI COMMODITY",
+        "target": "OIL PRICES",
+        "description": "",
+        "weight": "0.018522958441541757",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "1",
+        "source": "ALLOY MAKERS",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": "0.023009747558998785",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "6",
+        "source": "COMMODITY",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": "0.018927411500518354",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "7",
+        "source": "DERIVATIVES",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": "0.023009747558998785",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "10",
+        "source": "FUTURES TRADE",
+        "target": "SILVER CONTRACTS",
+        "description": "",
+        "weight": "0.023009747558998785",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "12",
+        "source": "FUTURES TRADE",
+        "target": "SPOT MARKET",
+        "description": "",
+        "weight": "0.023009747558998785",
+        "links": "2",
+        "in_context": true
+      },
+      {
+        "id": "23",
+        "source": "JANUARY",
+        "target": "MULTI COMMODITY",
+        "description": "",
+        "weight": "0.023702101603832203",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "26",
+        "source": "FIRM TREND",
+        "target": "MULTI COMMODITY",
+        "description": "",
+        "weight": "0.018522958441541757",
+        "links": "2",
+        "in_context": true
+      },
+      {
+        "id": "29",
+        "source": "MULTI COMMODITY",
+        "target": "PHYSICAL MARKETS",
+        "description": "",
+        "weight": "0.018522958441541757",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "30",
+        "source": "MULTI COMMODITY",
+        "target": "SILVER CONTRACTS",
+        "description": "",
+        "weight": "0.027784437662312637",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "32",
+        "source": "FIRM SPOT DEMAND",
+        "target": "GOLD CONTRACTS",
+        "description": "",
+        "weight": "0.021897208755179517",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "33",
+        "source": "FIRM SPOT DEMAND",
+        "target": "OIL PRICES",
+        "description": "",
+        "weight": "0.021897208755179517",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "34",
+        "source": "FIRM SPOT DEMAND",
+        "target": "SILVER CONTRACTS",
+        "description": "",
+        "weight": "0.032845813132769276",
+        "links": "5",
+        "in_context": true
+      },
+      {
+        "id": "19",
+        "source": "FIRM TREND",
+        "target": "SPOT DEMAND",
+        "description": "",
+        "weight": "0.027191339391622823",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "21",
+        "source": "PHYSICAL MARKETS",
+        "target": "SPOT DEMAND",
+        "description": "",
+        "weight": "0.027191339391622823",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "24",
+        "source": "JANUARY",
+        "target": "OIL PRICES",
+        "description": "",
+        "weight": "0.027191339391622823",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "2",
+        "source": "ALLOY MAKERS",
+        "target": "SPOT MARKET",
+        "description": "",
+        "weight": "0.04486934514591467",
+        "links": "2",
+        "in_context": true
+      },
+      {
+        "id": "15",
+        "source": "GOLD CONTRACTS",
+        "target": "GOLD PRICES",
+        "description": "",
+        "weight": "0.025080335490722083",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "16",
+        "source": "COMMODITY",
+        "target": "DERIVATIVES",
+        "description": "",
+        "weight": "0.04078700908743424",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "31",
+        "source": "CRUDE OIL",
+        "target": "OIL PRICES",
+        "description": "",
+        "weight": "0.02991289676394311",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "35",
+        "source": "FIRM TREND",
+        "target": "PHYSICAL MARKETS",
+        "description": "",
+        "weight": "0.03374871644080315",
+        "links": "2",
+        "in_context": true
+      },
+      {
+        "id": "17",
+        "source": "COMMODITY",
+        "target": "SOYA OIL PRICES",
+        "description": "",
+        "weight": "0.027191339391622823",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "18",
+        "source": "DERIVATIVES",
+        "target": "SOYA OIL PRICES",
+        "description": "",
+        "weight": "0.02991289676394311",
+        "links": "1",
+        "in_context": true
+      },
+      {
+        "id": "22",
+        "source": "CRUDE OIL",
+        "target": "JANUARY",
+        "description": "",
+        "weight": "0.02335551971476278",
+        "links": "3",
+        "in_context": true
+      },
+      {
+        "id": "3",
+        "source": "FRESH POSITIONS",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": "0.03403753982509972",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "4",
+        "source": "FRESH POSITIONS",
+        "target": "GOLD CONTRACTS",
+        "description": "",
+        "weight": "0.02335551971476278",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "0",
+        "source": "ALLOY MAKERS",
+        "target": "FRESH POSITIONS",
+        "description": "",
+        "weight": "0.03503327957214418",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "5",
+        "source": "FRESH POSITIONS",
+        "target": "SPOT MARKET",
+        "description": "",
+        "weight": "0.03503327957214418",
+        "links": "4",
+        "in_context": true
+      },
+      {
+        "id": "14",
+        "source": "ANNUAL PERFORMANCE",
+        "target": "GOLD PRICES",
+        "description": "",
+        "weight": "0.025080335490722083",
+        "links": "1",
+        "in_context": true
+      }
+    ],
+    "claims": [],
+    "sources": [
+      {
+        "id": "5",
+        "text": "Nickel prices rose by 0.59 per cent to Rs 1,219.40 per kg in futures trade on Friday as speculators built fresh positions on rising demand from alloy makers in spot market.\r\nOn the Multi Commodity Ex… [+253 chars]"
+      },
+      {
+        "id": "6",
+        "text": "Silver prices rose by Rs 92 to Rs 68,197 per kg in futures trade on Friday as participants widened their bets on firm spot demand.\r\nOn the Multi Commodity Exchange, silver contracts for March deliver… [+293 chars]"
+      },
+      {
+        "id": "17",
+        "text": "Guar gum prices on Monday gained Rs 6 to Rs 6,022 per five quintal in futures trade as speculators increased their holdings on spot demand.\r\nOn the National Commodity and Derivatives Exchange, guar g… [+425 chars]"
+      },
+      {
+        "id": "21",
+        "text": "Nickel prices rose 3.99 per cent to Rs 1,262 per kg in the futures trade on Monday, as speculators built fresh positions on rising demand from alloy makers in the spot market.\r\nOn the Multi Commodity… [+262 chars]"
+      },
+      {
+        "id": "23",
+        "text": "Silver prices rose Rs 2,114 to Rs 70,237 per kg in the futures trade on Monday as participants widened their bets on a firm spot demand.\r\nOn the Multi Commodity Exchange, silver contracts for the Mar… [+297 chars]"
+      },
+      {
+        "id": "24",
+        "text": "Gold prices rose Rs 871 to Rs 51,115 per 10 gram in the futures trade on Monday as speculators created fresh positions on a firm spot demand.\r\nOn the Multi Commodity Exchange, gold contracts for the … [+302 chars]"
+      },
+      {
+        "id": "29",
+        "text": "Gold prices rose Rs 64 to Rs 51,488 per 10 gram in the futures trade on Tuesday as speculators created fresh positions on a firm spot demand.\r\nOn the Multi Commodity Exchange, gold contracts for the … [+300 chars]"
+      },
+      {
+        "id": "30",
+        "text": "Silver prices rose Rs 374 to Rs 70,410 per kg in the futures trade on Tuesday as participants widened their bets on a firm spot demand.\r\nOn the Multi Commodity Exchange, silver contracts for the Marc… [+295 chars]"
+      },
+      {
+        "id": "31",
+        "text": "Nickel prices rose 0.72 per cent to Rs 1,278.40 per kg in the futures trade on Tuesday, as speculators built fresh positions on a rising demand from alloy makers in the spot market.\r\nOn the Multi Com… [+270 chars]"
+      },
+      {
+        "id": "3",
+        "text": "Refined soya oil prices on Friday rose by Rs 8.5 to Rs 1,198.6 per 10 kg in futures trade as speculators raised their bets.\r\nOn the National Commodity and Derivatives Exchange, refined soya oil for J… [+336 chars]"
+      },
+      {
+        "id": "4",
+        "text": "Zinc prices rose by 50 paise to Rs 214.90 per kg in futures trade on Friday tracking a firm trend in physical markets on the back of a pick-up in spot demand.\r\nOn the Multi Commodity Exchange, zinc c… [+285 chars]"
+      },
+      {
+        "id": "14",
+        "text": "Refined soya oil prices on Monday rose by Rs 21.5, to Rs 1,220.9 per 10 kg in futures trade as speculators raised their bets.\r\nOn the National Commodity and Derivatives Exchange, refined soya oil for… [+339 chars]"
+      },
+      {
+        "id": "22",
+        "text": "Zinc prices rose Rs 2.95 to Rs 217.85 per kg in the futures trade on Monday tracking a firm trend in physical markets on the back of a pick-up in the spot demand.\r\nOn the Multi Commodity Exchange, zi… [+296 chars]"
+      },
+      {
+        "id": "25",
+        "text": "Copper prices rose 1.76 per cent to Rs 605.70 per kg in futures trade on Monday on pick up in spot demand.\r\nOn the Multi Commodity Exchange, copper contracts for January delivery traded higher by Rs … [+199 chars]"
+      },
+      {
+        "id": "7",
+        "text": "Crude oil prices rose by Rs 16 to Rs 3,540 per barrel on Friday as participants widened their positions on firm spot demand.\r\nOn the Multi Commodity Exchange, crude oil for January delivery traded hi… [+338 chars]"
+      },
+      {
+        "id": "20",
+        "text": "Crude oil prices rose Rs 91 to Rs 3,618 per barrel on Monday as participants widened their positions on a firm spot demand. \r\nOn the Multi Commodity Exchange, crude oil for the January delivery trade… [+345 chars]"
+      },
+      {
+        "id": "0",
+        "text": "Gold prices, though little changed in holiday-thinned trade on Thursday, were on course for their best annual performance in 10 years.\r\nSpot gold, up more than 24 percent this year in its best perfor… [+1527 chars]"
+      },
+      {
+        "id": "1",
+        "text": "Gold prices, though little changed in holiday-thinned trade today, are on course for their best annual performance in a decade. \r\nSpot gold, up more than 24% this year in its best performance since 2… [+1481 chars]"
+      },
+      {
+        "id": "15",
+        "text": "Gold prices started the new year on a high by notching an eight-week peak on Monday, as spiking Covid -19 cases and prospects of tougher restrictions boosted the safe-haven metal's appeal.\r\nSpot gold… [+1809 chars]"
+      },
+      {
+        "id": "16",
+        "text": "Soybean prices on Monday went up by Rs 100 to Rs 4,730 per quintal in futures market as traders created fresh positions tracking positive spot demand.\r\nOn the National Commodity and Derivatives Excha… [+393 chars]"
+      },
+      {
+        "id": "28",
+        "text": "By Tapan PatelCommodity prices traded higher on Monday as most of the commodities in non-agro segment except crude oil ended higher for the day. Bullion prices extended gains on slump in dollar and r… [+3472 chars]"
+      },
+      {
+        "id": "19",
+        "text": "Gold rose 877 to 50,619 per 10 gram in the national capital on January 4 in line with gains in global precious metal prices, according to HDFC Securities. In the previous trade, the precious metal ha… [+356 chars]"
+      }
+    ]
+  },
+  "graph": {
+    "counts": {
+      "entities": 24,
+      "relationships": 36,
+      "communities": 6,
+      "community_reports": 1,
+      "text_units": 32
+    },
+    "top_entities_by_degree": [
+      {
+        "id": "71c634d7-bcbc-4ae6-a9f0-49d2a4577780",
+        "title": "FUTURES TRADE",
+        "degree": 9
+      },
+      {
+        "id": "16337b6d-2d81-4e86-a1cd-b26b2b199a28",
+        "title": "MULTI COMMODITY",
+        "degree": 9
+      },
+      {
+        "id": "202ebb9d-a5a3-47ca-8ba9-97f460bda720",
+        "title": "FIRM SPOT DEMAND",
+        "degree": 5
+      },
+      {
+        "id": "e9596fc5-2a16-4118-b41b-caf1e1b4f12e",
+        "title": "FRESH POSITIONS",
+        "degree": 4
+      },
+      {
+        "id": "7c7c2942-b5a4-40b3-a377-d05cdc9ef5ea",
+        "title": "SPOT DEMAND",
+        "degree": 4
+      }
+    ],
+    "sample_relationships": [
+      {
+        "source": "ALLOY MAKERS",
+        "target": "FRESH POSITIONS",
+        "description": "",
+        "weight": 0.03503327957214418
+      },
+      {
+        "source": "ALLOY MAKERS",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": 0.023009747558998785
+      },
+      {
+        "source": "ALLOY MAKERS",
+        "target": "SPOT MARKET",
+        "description": "",
+        "weight": 0.04486934514591467
+      },
+      {
+        "source": "FRESH POSITIONS",
+        "target": "FUTURES TRADE",
+        "description": "",
+        "weight": 0.03403753982509972
+      },
+      {
+        "source": "FRESH POSITIONS",
+        "target": "GOLD CONTRACTS",
+        "description": "",
+        "weight": 0.02335551971476278
+      }
+    ],
+    "communities": {
+      "level_distribution": {
+        "0": 6
+      },
+      "size_distribution": {
+        "3": 5,
+        "4": 1
+      }
+    }
+  },
+  "pipeline_stats": {
+    "total_runtime": 911.2791955471039,
+    "num_documents": 0,
+    "update_documents": 0,
+    "input_load_time": 0,
+    "workflows": {
+      "create_base_text_units": {
+        "overall": 0.07957959175109863
+      },
+      "create_final_documents": {
+        "overall": 0.03597569465637207
+      },
+      "extract_graph_nlp": {
+        "overall": 0.17398333549499512
+      },
+      "prune_graph": {
+        "overall": 0.09818673133850098
+      },
+      "finalize_graph": {
+        "overall": 0.0985574722290039
+      },
+      "create_communities": {
+        "overall": 0.10868358612060547
+      },
+      "create_final_text_units": {
+        "overall": 0.09503412246704102
+      },
+      "create_community_reports_text": {
+        "overall": 902.101087808609
+      },
+      "generate_text_embeddings": {
+        "overall": 8.485913753509521
+      }
+    }
+  },
+  "pipeline_state": {},
+  "workflows": [
+    {
+      "workflow": "create_base_text_units",
+      "errors": []
+    },
+    {
+      "workflow": "create_final_documents",
+      "errors": []
+    },
+    {
+      "workflow": "extract_graph_nlp",
+      "errors": []
+    },
+    {
+      "workflow": "prune_graph",
+      "errors": []
+    },
+    {
+      "workflow": "finalize_graph",
+      "errors": []
+    },
+    {
+      "workflow": "create_communities",
+      "errors": []
+    },
+    {
+      "workflow": "create_final_text_units",
+      "errors": []
+    },
+    {
+      "workflow": "create_community_reports_text",
+      "errors": []
+    },
+    {
+      "workflow": "generate_text_embeddings",
+      "errors": []
+    }
+  ],
+  "retrieved_vertices": [
+    "ALLOY MAKERS",
+    "COMMODITY",
+    "CRUDE OIL",
+    "DERIVATIVES",
+    "FIRM SPOT DEMAND",
+    "FIRM TREND",
+    "FUTURES TRADE",
+    "GOLD CONTRACTS",
+    "GOLD PRICES",
+    "JANUARY",
+    "MULTI COMMODITY",
+    "OIL PRICES",
+    "PHYSICAL MARKETS",
+    "SILVER CONTRACTS",
+    "SOYA OIL PRICES",
+    "SPOT DEMAND",
+    "SPOT MARKET"
+  ],
+  "retrieved_vertex_metrics": {
+    "status": "missing_ground_truth",
+    "documents_with_ground_truth": 0,
+    "documents_with_predictions": 0,
+    "documents_missing_predictions": 0,
+    "documents_with_annotations": 0,
+    "documents_with_exact_match": 0,
+    "micro": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "macro": {
+      "precision": null,
+      "recall": null,
+      "f1": null
+    },
+    "sorted_ground_truth_vertices": [],
+    "sorted_extracted_truth_vertices": [
+      "ALLOY MAKERS",
+      "COMMODITY",
+      "CRUDE OIL",
+      "DERIVATIVES",
+      "FIRM SPOT DEMAND",
+      "FIRM TREND",
+      "FUTURES TRADE",
+      "GOLD CONTRACTS",
+      "GOLD PRICES",
+      "JANUARY",
+      "MULTI COMMODITY",
+      "OIL PRICES",
+      "PHYSICAL MARKETS",
+      "SILVER CONTRACTS",
+      "SOYA OIL PRICES",
+      "SPOT DEMAND",
+      "SPOT MARKET"
+    ]
+  },
+  "artifact_paths": {
+    "documents": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/documents.parquet",
+    "entities": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/entities.parquet",
+    "relationships": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/relationships.parquet",
+    "communities": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/communities.parquet",
+    "community_reports": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/community_reports.parquet",
+    "text_units": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/output/text_units.parquet",
+    "covariates": null
+  },
+  "export_paths": {
+    "graph_data": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/exports/graph_data.json",
+    "community_summaries": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/exports/community_summaries.json",
+    "local_search_output": "/home/yjkim/gragfin-ws/Querying-llama3-8b-inst-me5-Promptdefault-Indexingfast/news_annov3-sample2/exports/local_search_output.json"
+  }
+}

@@ -25,6 +25,98 @@ if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from graphrag.config.models.language_model_config import LanguageModelConfig
 
 import logging
+import re
+import json
+
+# def extract_json(response_text: str):
+#     """
+#     Extracts the first JSON object found in a model-generated response string.
+    
+#     Parameters:
+#         response_text (str): The full text output from the model.
+    
+#     Returns:
+#         dict or None: Parsed JSON object if found, otherwise None.
+#     """
+#     # 중첩된 JSON도 매칭 가능한 정규식
+#     pattern = r'\{(?:[^{}]|(?R))*\}'
+    
+#     match = re.search(pattern, response_text, re.DOTALL)
+#     if not match:
+#         return None  # JSON이 없을 때
+    
+#     json_str = match.group(0)
+    
+#     try:
+#         return json.loads(json_str)
+#     except json.JSONDecodeError:
+#         # JSON 형식이 약간 깨져있을 경우에는 수동 보정 가능 (원하면 추가해줄게)
+#         return None
+
+
+from pydantic import BaseModel
+from typing import Any
+
+    
+def extract_json(response_text: str):
+    """
+    Extract the first valid JSON object from a string by tracking brace depth.
+    Works even when extra non-JSON text appears before or after the JSON.
+    """
+    start = None
+    depth = 0
+
+    for i, ch in enumerate(response_text):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start is not None:
+                json_str = response_text[start:i+1]
+                return json_str
+                # try:
+                #     return json.loads(json_str)  # Return parsed JSON
+                # except json.JSONDecodeError:
+                #     return None
+
+    # return None  # No valid JSON found
+
+import json
+import inspect
+from typing import Any, cast
+from pydantic import BaseModel, RootModel
+
+# dict 래퍼 (루트 모델)
+class DictModel(RootModel[dict[str, Any]]):
+    pass
+
+def _safe_extract_json_dict(text: str) -> dict[str, Any]:
+    """
+    text 안에서 유효한 JSON을 파싱해 dict로 반환.
+    - 전체가 JSON 문자열이 아니거나 리스트/스칼라면 감싸서 dict로 반환.
+    - 실패 시 빈 dict.
+    """
+    # 흔한 경우: ```json ... ``` 코드블록 제거
+    t = text.strip()
+    if t.startswith("```"):
+        # ```json ...``` 또는 ``` ...``` 케이스 단순 처리
+        first = t.find("\n")
+        last = t.rfind("```")
+        if first != -1 and last != -1:
+            t = t[first + 1:last].strip()
+
+    try:
+        data = json.loads(t)
+        if isinstance(data, dict):
+            return data
+        # 리스트/스칼라인 경우 감싸기
+        return {"data": data}
+    except Exception:
+        return {}
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -225,21 +317,87 @@ class HuggingFaceChatModel:
         turns.append(f"USER: {prompt}")
         return "\n".join(turns)
 
-    def _create_response(
-        self, text: str, raw: Any, history: list, metrics: dict[str, Any] | None = None
-    ) -> HuggingFaceModelResponse:
-        if isinstance(raw, dict) or raw is None:
-            full_response = raw
-        else:
-            full_response = {"text": str(raw)}
+    # def _create_response(
+    #     self,
+    #     text: str,
+    #     raw: Any,
+    #     history: list,
+    #     metrics: dict[str, Any] | None = None,
+    #     **kwargs
+    # ) -> HuggingFaceModelResponse:
+    #     full_response = raw if isinstance(raw, dict) or raw is None else {"text": str(raw)}
+    #     output = HuggingFaceModelOutput(content=text, full_response=full_response)
 
+    #     parsed_response = None
+
+    #     if kwargs.get("json", False) is True:
+    #         model_cls = kwargs.get("response_format")
+    #         if inspect.isclass(model_cls) and issubclass(model_cls, BaseModel):
+    #             # 문자열을 바로 모델로 검증 (권장, v2)
+    #             try:
+    #                 parsed_response = model_cls.model_validate_json(text)  # type: ignore[attr-defined]
+    #             except Exception:
+    #                 # 모델이 JSON이 아닌 프리앰블/설명과 함께 올 수 있으니 안전 파싱 후 검증
+    #                 data = _safe_extract_json_dict(text)
+    #                 parsed_response = model_cls.model_validate(data)
+    #         else:
+    #             # 스키마가 없으면 dict로 파싱해 넣기 (아래 방법 2와 동일)
+    #             data = _safe_extract_json_dict(text)
+    #             parsed_response = DictModel.model_validate({"__root__": data})
+
+    #     return HuggingFaceModelResponse(
+    #         output=output,
+    #         history=history,
+    #         cache_hit=False,
+    #         metrics=metrics,
+    #         parsed_response=parsed_response,
+    #     )
+
+
+    def _create_response(
+        self,
+        text: str,
+        raw: Any,
+        history: list,
+        metrics: dict[str, Any] | None = None,
+        **kwargs
+    ) -> HuggingFaceModelResponse:
+        # full_response 구성
+        full_response = raw if isinstance(raw, dict) or raw is None else {"text": str(raw)}
         output = HuggingFaceModelOutput(content=text, full_response=full_response)
+
+        parsed_response: BaseModel | None = None
+
+        # OpenAI 호환 플래그들: json, name, json_model
+        want_json: bool = bool(kwargs.get("json", False))
+        # 모델 클래스는 json_model 우선, 없으면 response_format 호환
+        model_cls = kwargs.get("json_model") or kwargs.get("response_format")
+
+        logger.info(f'want_json:{want_json}')
+        logger.info(f'model_cls:{model_cls}')
+        logger.info(f'text:{text}\n{_safe_extract_json_dict(text)}')
+        if want_json:
+            if inspect.isclass(model_cls) and issubclass(model_cls, BaseModel):
+                # 스키마가 있으면: 문자열을 바로 모델로 검증 (v2)
+                try:
+                    parsed_response = model_cls.model_validate_json(text)  # type: ignore[attr-defined]
+                except Exception:
+                    # 문자열에 프리앰블/코드블록 등이 섞였을 수 있으니 안전 파싱 후 검증
+                    data = _safe_extract_json_dict(text)
+                    parsed_response = model_cls.model_validate(data)
+            else:
+                # 스키마가 없으면: dict로 파싱 후 RootModel 래퍼에 담아 BaseModel 보장
+                data = _safe_extract_json_dict(text)
+                parsed_response = DictModel.model_validate(data)
+
         return HuggingFaceModelResponse(
             output=output,
             history=history,
             cache_hit=False,
             metrics=metrics,
+            parsed_response=parsed_response,
         )
+
 
     def _prepare_prompt(self, prompt: str, history: list | None, messages: list[dict[str, str]]) -> str:
         if self.task == "chat-completion" and hasattr(self._tokenizer, "apply_chat_template"):
@@ -303,12 +461,21 @@ class HuggingFaceChatModel:
             thread.join()
 
     def chat(self, prompt: str, history: list | None = None, **kwargs: Any) -> HuggingFaceModelResponse:
+        kwargs_reports = dict()
+        kwargs_reports['json'] = kwargs.pop('json', None)
+        kwargs_reports['name'] = kwargs.pop('name', None)
+        kwargs_reports['json_model'] = kwargs.pop('json_model', None)
         messages = self._build_messages(prompt, history)
         prompt_text = self._prepare_prompt(prompt, history, messages)
+        if kwargs_reports['json']:
+            prompt_text += """\n\nAnswer in JSON only.\n\nIf your output contains anything outside of the JSON object, your response is invalid."""
+
         text = self._generate_text(prompt_text, **kwargs)
         history_out = [*messages, {"role": "assistant", "content": text}]
         metrics = self._build_usage_metrics(prompt_text, text)
-        return self._create_response(text, text, history_out, metrics)
+
+        kwargs_response = dict(**kwargs_reports)
+        return self._create_response(text, text, history_out, metrics, **kwargs_response)
 
     async def achat(
         self,
