@@ -10,7 +10,7 @@ from ..utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-from transformers import PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer
+from transformers import PreTrainedTokenizer, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 def convert_text_chat_messages_to_strings(messages: List[TextChatMessage], tokenizer: PreTrainedTokenizer, add_assistant_header=True) -> List[str]:
     return tokenizer.apply_chat_template(conversation=messages, tokenize=False)
@@ -39,8 +39,29 @@ class TransformersOffline:
             model_name = 'meta-llama/Llama-3.1-8B-Instruct'
         import os
         self.model_name = model_name
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, device_map='auto', torch_dtype = torch.bfloat16)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     model_name, device_map='auto', torch_dtype = torch.bfloat16
+        #     )
+
+        quantization_config = {
+            'load_in_4bit': True,
+            'load_in_8bit': False,
+            'bnb_4bit_use_double_quant': True,
+            'bnb_4bit_compute_dtype': 'float16',
+            'bnb_4bit_quant_type': 'nf4',
+        }
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, 
+            trust_remote_code=True, 
+            quantization_config=BitsAndBytesConfig(**quantization_config), 
+            cache_dir=os.getenv('CACHE_DIR'),
+            attn_implementation=os.getenv('ATTN_IMPLEMENTATION', "flash_attention_2"),
+            token=os.getenv('HF_TOKEN'),
+            )
+        self.model.eval()
+
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
         
         if cache_filename is None:
             cache_filename = f'{model_name.replace("/", "_")}_cache.sqlite'

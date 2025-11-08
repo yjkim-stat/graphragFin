@@ -1,3 +1,5 @@
+lib
+outputs
 outputs/llama3*
 outputs/*.csv
 outputs/*.json

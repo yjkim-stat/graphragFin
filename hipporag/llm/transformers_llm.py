@@ -109,7 +109,7 @@ class TransformersLLM(BaseLLM):
             token=os.getenv('HF_TOKEN'),
 
             )
-        self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.global_config.llm_name, padding_side='left')
 
         self.retry = 5
         

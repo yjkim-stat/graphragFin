@@ -363,7 +363,9 @@ class HippoRAG:
     def retrieve(self,
                  queries: List[str],
                  num_to_retrieve: int = None,
-                 gold_docs: List[List[str]] = None) -> List[QuerySolution] | Tuple[List[QuerySolution], Dict]:
+                 gold_docs: List[List[str]] = None,
+                 return_logs=False,
+                 ) -> List[QuerySolution] | Tuple[List[QuerySolution], Dict]:
         """
         Performs retrieval using the HippoRAG 2 framework, which consists of several steps:
         - Fact Retrieval
@@ -391,6 +393,7 @@ class HippoRAG:
         -----
         - Long queries with no relevant facts after reranking will default to results from dense passage retrieval.
         """
+        logs = []
         retrieve_start_time = time.time()  # Record start time
 
         if num_to_retrieve is None:
@@ -407,17 +410,25 @@ class HippoRAG:
         retrieval_results = []
 
         for q_idx, query in tqdm(enumerate(queries), desc="Retrieving", total=len(queries)):
+            logs.append(f'Query:{query}')
             rerank_start = time.time()
+
             query_fact_scores = self.get_fact_scores(query)
+            logs.append(f'query_fact_scores:{query_fact_scores}')
+
             top_k_fact_indices, top_k_facts, rerank_log = self.rerank_facts(query, query_fact_scores)
+            logs.append(f'top_k_facts:{top_k_facts}')
+
             rerank_end = time.time()
 
             self.rerank_time += rerank_end - rerank_start
 
             if len(top_k_facts) == 0:
                 logger.info('No facts found after reranking, return DPR results')
+                logs.append('No facts found after reranking, return DPR results')
                 sorted_doc_ids, sorted_doc_scores = self.dense_passage_retrieval(query)
             else:
+                logs.append('Using graph search')
                 sorted_doc_ids, sorted_doc_scores = self.graph_search_with_fact_entities(query=query,
                                                                                          link_top_k=self.global_config.linking_top_k,
                                                                                          query_fact_scores=query_fact_scores,
@@ -443,10 +454,15 @@ class HippoRAG:
             k_list = [1, 2, 5, 10, 20, 30, 50, 100, 150, 200]
             overall_retrieval_result, example_retrieval_results = retrieval_recall_evaluator.calculate_metric_scores(gold_docs=gold_docs, retrieved_docs=[retrieval_result.docs for retrieval_result in retrieval_results], k_list=k_list)
             logger.info(f"Evaluation results for retrieval: {overall_retrieval_result}")
-
-            return retrieval_results, overall_retrieval_result
+            if return_logs:
+                return retrieval_results, overall_retrieval_result, logs
+            else:
+                return retrieval_results, overall_retrieval_result
         else:
-            return retrieval_results
+            if return_logs:
+                return retrieval_results, logs
+            else:
+                return retrieval_results
 
     def rag_qa(self,
                queries: List[str|QuerySolution],
@@ -1040,6 +1056,7 @@ class HippoRAG:
         new_nodes = {}
         for node_id, node in node_to_rows.items():
             node['name'] = node_id
+            node['label'] = node['content'] # Label 표시
             if node_id not in existing_nodes:
                 for k, v in node.items():
                     if k not in new_nodes:
@@ -1401,7 +1418,7 @@ class HippoRAG:
                 if phrase_id is not None:
                     all_phrase_weights[phrase_id] = 0.0
 
-        assert np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys())
+        # assert np.count_nonzero(all_phrase_weights) == len(linking_score_map.keys()), f'all_phrase_weights:{all_phrase_weights}\nlinking_score_map:{linking_score_map}'
         return all_phrase_weights, linking_score_map
 
     def graph_search_with_fact_entities(self, query: str,

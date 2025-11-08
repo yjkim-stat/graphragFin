@@ -145,6 +145,7 @@ def _build_config(
                     "max_new_tokens": args.max_new_tokens,
                     "temperature": args.temperature,
                 },
+                "request_timeout": 5,
             },
             "default_embedding_model": {
                 "type": "huggingface_embedding",
@@ -154,6 +155,7 @@ def _build_config(
                 "huggingface_parameters": {
                     "normalize": True,
                 },
+                
             },
         },
         "cache": {"type": "file", "base_dir": "cache"},

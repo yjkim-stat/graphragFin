@@ -139,9 +139,12 @@ def _run_hipporag_index(
     chunk_to_text_units: Mapping[str, set[str]],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     hippo = HippoRAG(global_config=hippo_config)
+    logger.info(f'docs:\n\t{docs}')
     hippo.index(docs)
 
     openie_results, _ = hippo.load_existing_openie([])
+    logger.info(f'openie_results:{openie_results}')
+    logger.info(f'chunk_to_text_units:{chunk_to_text_units}')
     return _convert_openie_to_tables(openie_results, chunk_to_text_units)
 
 
