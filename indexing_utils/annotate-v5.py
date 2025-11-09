@@ -402,6 +402,9 @@ summary_md += f"**Created at:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n
 summary_md += f"**Input file:** `{args.in_fname}`\n\n"
 summary_md += f"**Rule-based enabled:** {args.rule_based}\n\n"
 summary_md += f"**POS tagging enabled:** {args.pos_tagging}\n\n"
+summary_md += f"**The number of documents:** {len(df)}\n\n"
+
+
 summary_md += "## Top Entities\n\n"
 
 if not summary_df.empty:

@@ -828,54 +828,61 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             "Run run_finance_graphrag-v2.py before rendering the view."
         )
 
-    community_path = args.community_path or (output_dir / "comunities.parquet")
+    community_path = args.community_path or (output_dir / "communities.parquet")
+    community_report_path = args.community_path or (output_dir / "community_reports.parquet")
     document_path = args.document_path or (output_dir / "documents.parquet")
     entity_path = args.entity_path or (output_dir / "entities.parquet")
     relationship_path = args.relationship_path or (output_dir / "relationships.parquet")
-    textunit_path = args.textunit_path or (output_dir / "test_units.parquet")
+    textunit_path = args.textunit_path or (output_dir / "text_units.parquet")
 
     markdown_path = args.markdown_path or (output_dir / "graphrag_summary.md")
     image_path = args.graph_image_path or (output_dir / "graphrag_graph.png")
 
     communities = _load_parquet(community_path)
+    community_report = _load_parquet(community_report_path)
     documents = _load_parquet(document_path)
     entities = _load_parquet(entity_path)
     relationships = _load_parquet(relationship_path)
-    test_units = _load_parquet(textunit_path)
+    text_units = _load_parquet(textunit_path)
 
     print('='*50)
     print(f'\t communities')
-    # print(communities.info())
+    print(f'communities : {communities is not None}')
+    print(communities.info())
     print('='*50)
     print(f'\t documents')
-    print(documents.info())
+    print(f'documents : {documents is not None}')
+    # print(documents.info())
     print('='*50)
     print(f'\t entities')
-    print(entities.info())
+    print(f'entities : {entities is not None}')
+    # print(entities.info())
     print('='*50)
     print(f'\t relationships')
-    print(relationships.info())
+    print(f'relationships : {relationships is not None}')
+    # print(relationships.info())
     print('='*50)
-    print(f'\t test_units')
-    # print(test_units.info())
+    print(f'\t text_units')
+    print(f'text_units : {text_units is not None}')
+    # print(text_units.info())
     print('='*50)
 
 
-    # Output 1 : HTML for graph visualization
+    # # Output 1 : HTML for graph visualization
 
-    save_graph_html(entities, relationships, out_path= output_dir / "view-graph.html")
+    # save_graph_html(entities, relationships, out_path= output_dir / "view-graph.html")
 
-    # 실제 실행
-    # markdown_output = generate_relationship_markdown(entities, relationships)
-    # (output_dir / "view-graph.md").write_text(markdown_output, encoding='utf-8')
-    markdown_output_nhop = generate_graph_markdown_with_nhops(
-        entities, relationships,
-        max_hops=3,                       # 최대 3-hop
-        start_ids=None,                   # 모든 엔티티를 시작점으로
-        max_paths_per_source=30,          # 시작점당 30개 경로 제한
-        bidirectional=False               # True면 무향처럼 확장
-    )
-    (output_dir / "view-graph-nhops.md").write_text(markdown_output_nhop, encoding='utf-8')
+    # # 실제 실행
+    # # markdown_output = generate_relationship_markdown(entities, relationships)
+    # # (output_dir / "view-graph.md").write_text(markdown_output, encoding='utf-8')
+    # markdown_output_nhop = generate_graph_markdown_with_nhops(
+    #     entities, relationships,
+    #     max_hops=3,                       # 최대 3-hop
+    #     start_ids=None,                   # 모든 엔티티를 시작점으로
+    #     max_paths_per_source=30,          # 시작점당 30개 경로 제한
+    #     bidirectional=False               # True면 무향처럼 확장
+    # )
+    # (output_dir / "view-graph-nhops.md").write_text(markdown_output_nhop, encoding='utf-8')
 
     # save_graph_html(nodes_df, edges_df,
     #                 node_id_col="id", node_label_col="title",

@@ -89,20 +89,20 @@ class TransformersOffline:
             logger.info(f"Calling Transformers offline, # of messages {len(messages_list)}, using batchsize = 4")
 
         all_prompt_texts = [convert_text_chat_messages_to_input_string(messages, self.tokenizer) for messages in messages_list]
-
+        # print(f'all_prompt_texts:{len(all_prompt_texts)}')
         guided = None
         if json_template is not None:
             guided_json=get_pydantic_model(json_template)
             outlines_model = models.Transformers(self.model, self.tokenizer)
             generator = generate.json(outlines_model, guided_json)
             transformers_outputs = []
-            for i in range(0, len(all_prompt_texts), 4):
-                transformers_output = generator(all_prompt_texts[i:i+4], max_tokens=max_tokens)
+            for i in range(0, len(all_prompt_texts), 2):
+                transformers_output = generator(all_prompt_texts[i:i+2], max_tokens=max_tokens)
                 transformers_outputs.extend(transformers_output)
         else:
             transformers_outputs = []
-            for i in range(0, len(all_prompt_texts), 4):
-                transformers_output = self.model.generate(all_prompt_texts[i:i+4], max_tokens=max_tokens)
+            for i in range(0, len(all_prompt_texts), 2):
+                transformers_output = self.model.generate(all_prompt_texts[i:i+2], max_tokens=max_tokens)
                 transformers_outputs.extend(transformers_output)
         all_responses = [completion.model_dump_json() for completion in transformers_outputs]
         all_prompt_tokens = [len(self.tokenizer.encode(prompt)) for prompt in all_prompt_texts]

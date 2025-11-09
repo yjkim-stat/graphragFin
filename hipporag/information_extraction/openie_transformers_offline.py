@@ -36,14 +36,15 @@ class TransformersOfflineOpenIE(OpenIE):
 
         ner_input_messages = [self.prompt_template_manager.render(name='ner', passage=p) for p in chunk_passages.values()]
         # ner_output, ner_output_metadata = self.llm_model.batch_infer(ner_input_messages, json_template='ner', max_tokens=512)
-        ner_output, ner_output_metadata = self.llm_model.batch_infer(ner_input_messages, json_template='ner', max_tokens=4096)
+        ner_output, ner_output_metadata = self.llm_model.batch_infer(ner_input_messages, json_template='ner', max_tokens=2048)
 
         triple_extract_input_messages = [self.prompt_template_manager.render(
             name='triple_extraction',
             passage=passage,
             named_entity_json=named_entities
         ) for passage, named_entities in zip(chunk_passages.values(), ner_output)]
-        triple_output, triple_output_metadata = self.llm_model.batch_infer(triple_extract_input_messages, json_template='triples', max_tokens=4096)
+        logger.info(f'triple_extract_input_messages:{len(triple_extract_input_messages)}')
+        triple_output, triple_output_metadata = self.llm_model.batch_infer(triple_extract_input_messages, json_template='triples', max_tokens=5000)
 
         ner_raw_outputs = []
         for idx, ner_output_instance in enumerate(ner_output):
